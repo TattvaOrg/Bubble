@@ -1,0 +1,76 @@
+name: Update AUR
+
+on:
+  # After a green Build of main, never on the push itself: a commit that
+  # fails to build or test must not reach the AUR.
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+    branches:
+      - main
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: aur-update
+  cancel-in-progress: false
+
+jobs:
+  aur:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute pkgver
+        id: pkgver
+        run: |
+          pkgver="r$(git rev-list --count HEAD).g$(git rev-parse --short HEAD)"
+          echo "pkgver=$pkgver" >> "$GITHUB_OUTPUT"
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "$AUR_SSH_KEY" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          {
+            echo "Host aur.archlinux.org"
+            echo "  IdentityFile ~/.ssh/aur"
+            echo "  User aur"
+          } >> ~/.ssh/config
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts 2>/dev/null
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+
+      - name: Clone AUR repo
+        run: git clone ssh://aur@aur.archlinux.org/bubble-git.git aur-repo
+
+      - name: Sync package metadata
+        run: |
+          cp PKGBUILD aur-repo/PKGBUILD
+          sed -i "s/^pkgver=.*/pkgver=$PKGVER/" aur-repo/PKGBUILD
+          docker run --rm --volume "$PWD/aur-repo:/pkg" archlinux:base-devel \
+            bash -c 'useradd --uid "$(stat --format=%u /pkg)" --create-home builder && cd /pkg && runuser -u builder -- makepkg --printsrcinfo' \
+            > aur-repo/.SRCINFO
+        env:
+          PKGVER: ${{ steps.pkgver.outputs.pkgver }}
+
+      - name: Push to AUR
+        run: |
+          cd aur-repo
+          git config user.name "Soyeb Pervez Jim"
+          git config user.email "soyebpervezjim@gmail.com"
+          if git diff --quiet; then
+            echo "No changes to push"
+            exit 0
+          fi
+          git add PKGBUILD .SRCINFO
+          git commit -m "bump pkgver to $PKGVER"
+          git push
+        env:
+          PKGVER: ${{ steps.pkgver.outputs.pkgver }}

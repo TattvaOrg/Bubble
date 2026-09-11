@@ -14,16 +14,6 @@ set(CMAKE_AUTORCC ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 DBus Svg Network Concurrent Sql)
 find_package(KF6WindowSystem QUIET)
 
-# Cargo build for Rust workspace
-add_custom_target(cargo_bubble
-    COMMAND cargo build --release --workspace
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-    BYPRODUCTS
-        "${CMAKE_SOURCE_DIR}/target/release/bubble-vault-helper"
-        "${CMAKE_SOURCE_DIR}/target/release/bubble-vault-destroy"
-    COMMENT "Compiling Rust workspace (bubble-core, bubble-vault-helper, bubble-vault-destroy)..."
-)
-
 add_subdirectory(src)
 
 # Install themes
