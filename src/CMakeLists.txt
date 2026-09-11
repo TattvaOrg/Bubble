@@ -255,7 +255,9 @@ target_link_libraries(bubble PRIVATE
     Qt6::Sql
     OpenSSL::Crypto
     PkgConfig::ARGON2
+    PkgConfig::SQLITE3
     PkgConfig::GIO
+    rust_bubble_core
 )
 
 if(KF6WindowSystem_FOUND)
@@ -267,26 +269,9 @@ target_include_directories(bubble PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
 
-# Standalone uninstall cleanup tool
-qt_add_executable(bubble-vault-destroy
-    vaultdestroy.cpp
-    services/cryptoengine.cpp
-    services/vaultdatabase.cpp
-)
-target_link_libraries(bubble-vault-destroy PRIVATE
-    Qt6::Core
-    Qt6::Sql
-    OpenSSL::Crypto
-    PkgConfig::ARGON2
-)
-target_include_directories(bubble-vault-destroy PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-# Standalone immutable attribute helper
-add_executable(bubble-vault-helper
-    vaulthelper.cpp
-)
+# Standalone helper targets mapped to cargo_bubble
+add_custom_target(bubble-vault-destroy DEPENDS cargo_bubble)
+add_custom_target(bubble-vault-helper DEPENDS cargo_bubble)
 
 set(BUBBLE_DATA_DIR "${CMAKE_SOURCE_DIR}" CACHE STRING "Runtime data directory for themes and QML")
 
@@ -306,7 +291,12 @@ if(KF6WindowSystem_FOUND)
     )
 endif()
 
-install(TARGETS bubble bubble-vault-destroy bubble-vault-helper DESTINATION bin)
+install(TARGETS bubble DESTINATION bin)
+install(PROGRAMS
+    "${CMAKE_SOURCE_DIR}/rust/target/release/bubble-vault-helper"
+    "${CMAKE_SOURCE_DIR}/rust/target/release/bubble-vault-destroy"
+    DESTINATION bin
+)
 install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.desktop"
     DESTINATION share/applications)
 install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.svg"

@@ -101,4 +101,5 @@ private:
     mutable QHash<QString, RateLimitEntry> m_rateLimits;
     QString m_lastError;
     class QTimer *m_processMonitorTimer = nullptr;
+    void *m_rustVault = nullptr;
 };

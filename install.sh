@@ -224,6 +224,11 @@ detect_missing_dependencies() {
         missing+=("c++-compiler")
     fi
 
+    # Rust toolchain
+    if ! command -v cargo >/dev/null 2>&1 || ! command -v rustc >/dev/null 2>&1; then
+        missing+=("rust")
+    fi
+
     # Libraries check via pkg-config if available
     local PKG_CMD=""
     if command -v pkgconf >/dev/null 2>&1; then
@@ -242,8 +247,11 @@ detect_missing_dependencies() {
         if ! "$PKG_CMD" --exists openssl 2>/dev/null; then
             missing+=("openssl")
         fi
+        if ! "$PKG_CMD" --exists sqlite3 2>/dev/null; then
+            missing+=("sqlite3")
+        fi
     else
-        missing+=("gio-2.0" "libargon2" "openssl")
+        missing+=("gio-2.0" "libargon2" "openssl" "sqlite3")
     fi
 
     # Qt6 Core / Quick
@@ -273,19 +281,19 @@ install_distro_dependencies() {
 
     if [[ "$OS_ID" =~ (arch|cachyos|manjaro|endeavouros|artix|garuda) || "$OS_LIKE" =~ arch ]]; then
         install_cmd="pacman -S --needed"
-        pkg_list="cmake ninja git pkgconf gcc qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils openssl argon2 psmisc"
+        pkg_list="cmake ninja git pkgconf gcc rust sqlite qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils openssl argon2 psmisc"
     elif [[ "$OS_ID" =~ (debian|ubuntu|linuxmint|pop|elementary|zorin|kali) || "$OS_LIKE" =~ (debian|ubuntu) ]]; then
         install_cmd="apt-get install -y"
-        pkg_list="cmake ninja-build git pkg-config g++ qt6-base-dev qt6-declarative-dev libqt6svg6-dev qt6-wayland libglib2.0-dev xdg-utils libssl-dev libargon2-dev libqt6sql6-sqlite psmisc"
+        pkg_list="cmake ninja-build git pkg-config g++ rustc cargo libsqlite3-dev qt6-base-dev qt6-declarative-dev libqt6svg6-dev qt6-wayland libglib2.0-dev xdg-utils libssl-dev libargon2-dev libqt6sql6-sqlite psmisc"
     elif [[ "$OS_ID" =~ (fedora|rhel|centos|rocky|alma) || "$OS_LIKE" =~ (fedora|rhel) ]]; then
         install_cmd="dnf install -y"
-        pkg_list="cmake ninja-build git pkgconf-pkg-config gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtwayland glib2-devel xdg-utils openssl-devel libargon2-devel qt6-qtbase-sqlite psmisc"
+        pkg_list="cmake ninja-build git pkgconf-pkg-config gcc-c++ rust cargo sqlite-devel qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtwayland glib2-devel xdg-utils openssl-devel libargon2-devel qt6-qtbase-sqlite psmisc"
     elif [[ "$OS_ID" =~ opensuse || "$OS_LIKE" =~ (suse|opensuse) ]]; then
         install_cmd="zypper install -y"
-        pkg_list="cmake ninja git pkgconf gcc-c++ qt6-base-devel qt6-declarative-devel libqt6svg6-devel libQt6WaylandClient6 glib2-devel xdg-utils libopenssl-devel libargon2-devel psmisc"
+        pkg_list="cmake ninja git pkgconf gcc-c++ rust cargo sqlite3-devel qt6-base-devel qt6-declarative-devel libqt6svg6-devel libQt6WaylandClient6 glib2-devel xdg-utils libopenssl-devel libargon2-devel psmisc"
     elif [[ "$OS_ID" == "void" ]]; then
         install_cmd="xbps-install -S -y"
-        pkg_list="cmake ninja git pkg-config gcc qt6-base-devel qt6-declarative-devel qt6-svg-devel qt6-wayland-devel glib-devel openssl-devel libargon2-devel psmisc"
+        pkg_list="cmake ninja git pkg-config gcc rust cargo sqlite-devel qt6-base-devel qt6-declarative-devel qt6-svg-devel qt6-wayland-devel glib-devel openssl-devel libargon2-devel psmisc"
     else
         echo "Warning: Could not automatically identify your Linux distribution ($OS_ID)." >&2
         return 1

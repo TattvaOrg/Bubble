@@ -1,6 +1,7 @@
 #include "vaultservice.h"
 #include "cryptoengine.h"
 #include "vaultdatabase.h"
+#include "rust_vault.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QDirIterator>
@@ -25,7 +26,11 @@ VaultService::VaultService(const QString &configDir, QObject *parent)
     , m_crypto(new CryptoEngine(this))
     , m_db(new VaultDatabase(this))
     , m_configDir(configDir)
+    , m_rustVault(bubble_vault_new(configDir.toUtf8().constData()))
 {
+    if (!m_rustVault) {
+        qWarning() << "Failed to initialize Rust VaultService at" << m_configDir;
+    }
     if (!m_db->open(m_configDir + "/vault.db")) {
         qWarning() << "Failed to open vault database at" << m_configDir + "/vault.db";
     }
@@ -52,10 +57,42 @@ VaultService::~VaultService()
     m_activeFileSessions.clear();
 
     relockAllSessions();
+
+    if (m_rustVault) {
+        bubble_vault_free(m_rustVault);
+        m_rustVault = nullptr;
+    }
 }
 
 bool VaultService::lockItem(const QString &path, const QString &password)
 {
+    if (m_rustVault) {
+        if (bubble_vault_is_locked(m_rustVault, path.toUtf8().constData())) {
+            emit lockError(path, "Item is already locked");
+            return false;
+        }
+
+        QFileInfo info(path);
+        if (!info.exists()) {
+            emit lockError(path, "Path does not exist");
+            return false;
+        }
+
+        bool success = bubble_vault_lock_item(m_rustVault, path.toUtf8().constData(), password.toUtf8().constData());
+        if (success) {
+            emit itemLocked(path);
+            return true;
+        } else {
+            char errBuf[256] = {0};
+            if (bubble_vault_last_error(m_rustVault, errBuf, sizeof(errBuf)) && errBuf[0]) {
+                emit lockError(path, QString::fromUtf8(errBuf));
+            } else {
+                emit lockError(path, "Failed to lock item");
+            }
+            return false;
+        }
+    }
+
     if (isLocked(path)) {
         emit lockError(path, "Item is already locked");
         return false;
@@ -94,6 +131,10 @@ bool VaultService::lockItems(const QStringList &paths, const QString &password)
 
 int VaultService::getRemainingLockoutSeconds(const QString &path) const
 {
+    if (m_rustVault) {
+        return static_cast<int>(bubble_vault_get_lockout_seconds(m_rustVault, path.toUtf8().constData()));
+    }
+
     if (!m_rateLimits.contains(path)) return 0;
     const auto &entry = m_rateLimits.value(path);
     if (entry.attempts <= 3) return 0;
@@ -126,6 +167,44 @@ void VaultService::clearFailedAttempts(const QString &path)
 
 bool VaultService::unlockItem(const QString &path, const QString &password)
 {
+    if (m_rustVault) {
+        if (!bubble_vault_is_locked(m_rustVault, path.toUtf8().constData())) {
+            emit lockError(path, "Item is not locked");
+            return false;
+        }
+
+        uint64_t lockout = bubble_vault_get_lockout_seconds(m_rustVault, path.toUtf8().constData());
+        if (lockout > 0) {
+            emit lockError(path, QString("Too many failed attempts. Try again in %1s.").arg(lockout));
+            return false;
+        }
+
+        bool success = bubble_vault_unlock_item(m_rustVault, path.toUtf8().constData(), password.toUtf8().constData());
+        if (success) {
+            emit itemUnlocked(path);
+            return true;
+        } else {
+            char errBuf[256] = {0};
+            if (bubble_vault_last_error(m_rustVault, errBuf, sizeof(errBuf)) && errBuf[0]) {
+                QString err = QString::fromUtf8(errBuf);
+                m_lastError = err;
+                if (err.contains("Access Denied", Qt::CaseInsensitive) || err.contains("Incorrect password", Qt::CaseInsensitive)) {
+                    uint64_t nextLockout = bubble_vault_get_lockout_seconds(m_rustVault, path.toUtf8().constData());
+                    if (nextLockout > 0) {
+                        emit lockError(path, QString("Incorrect password. Locked for %1s.").arg(nextLockout));
+                    } else {
+                        emit accessDenied(path);
+                    }
+                } else {
+                    emit lockError(path, err);
+                }
+            } else {
+                emit accessDenied(path);
+            }
+            return false;
+        }
+    }
+
     VaultEntry entry = m_db->findByPath(path);
     if (entry.id == 0) {
         emit lockError(path, "Item is not locked");
@@ -168,16 +247,29 @@ bool VaultService::unlockItem(const QString &path, const QString &password)
 
 QString VaultService::lastError() const
 {
+    if (m_rustVault) {
+        char errBuf[512] = {0};
+        if (bubble_vault_last_error(m_rustVault, errBuf, sizeof(errBuf)) && errBuf[0]) {
+            return QString::fromUtf8(errBuf);
+        }
+    }
     return m_lastError;
 }
 
 void VaultService::clearLastError()
 {
+    if (m_rustVault) {
+        bubble_vault_clear_last_error(m_rustVault);
+    }
     m_lastError.clear();
 }
 
 bool VaultService::isLocked(const QString &path) const
 {
+    if (m_rustVault) {
+        return bubble_vault_is_locked(m_rustVault, path.toUtf8().constData());
+    }
+
     if (!m_db->hasEntry(path)) {
         return false;
     }
@@ -223,11 +315,35 @@ bool VaultService::isLocked(const QString &path) const
 
 bool VaultService::isSessionUnlocked(const QString &path) const
 {
+    if (m_rustVault) {
+        return bubble_vault_is_session_unlocked(m_rustVault, path.toUtf8().constData()) || m_activeSessions.contains(path);
+    }
     return m_activeSessions.contains(path);
 }
 
 bool VaultService::changePassword(const QString &path, const QString &oldPassword, const QString &newPassword)
 {
+    if (m_rustVault) {
+        bool success = bubble_vault_change_password(m_rustVault, path.toUtf8().constData(), oldPassword.toUtf8().constData(), newPassword.toUtf8().constData());
+        if (success) {
+            return true;
+        } else {
+            char errBuf[256] = {0};
+            if (bubble_vault_last_error(m_rustVault, errBuf, sizeof(errBuf)) && errBuf[0]) {
+                QString err = QString::fromUtf8(errBuf);
+                m_lastError = err;
+                if (err.contains("Access denied", Qt::CaseInsensitive) || err.contains("Incorrect password", Qt::CaseInsensitive)) {
+                    emit accessDenied(path);
+                } else {
+                    emit lockError(path, err);
+                }
+            } else {
+                emit lockError(path, "Failed to change password");
+            }
+            return false;
+        }
+    }
+
     VaultEntry entry = m_db->findByPath(path);
     if (entry.id == 0) {
         emit lockError(path, "Item is not locked");
@@ -292,6 +408,44 @@ bool VaultService::changePassword(const QString &path, const QString &oldPasswor
 
 bool VaultService::sessionUnlockFolder(const QString &path, const QString &password)
 {
+    if (m_rustVault) {
+        if (!bubble_vault_is_locked(m_rustVault, path.toUtf8().constData())) {
+            emit lockError(path, "Folder is not locked");
+            return false;
+        }
+
+        uint64_t lockout = bubble_vault_get_lockout_seconds(m_rustVault, path.toUtf8().constData());
+        if (lockout > 0) {
+            emit lockError(path, QString("Too many failed attempts. Try again in %1s.").arg(lockout));
+            return false;
+        }
+
+        bool success = bubble_vault_session_unlock_folder(m_rustVault, path.toUtf8().constData(), password.toUtf8().constData());
+        if (success) {
+            m_activeSessions.insert(path);
+            emit sessionStarted(path);
+            return true;
+        } else {
+            char errBuf[256] = {0};
+            if (bubble_vault_last_error(m_rustVault, errBuf, sizeof(errBuf)) && errBuf[0]) {
+                QString err = QString::fromUtf8(errBuf);
+                if (err.contains("Access Denied", Qt::CaseInsensitive) || err.contains("Incorrect password", Qt::CaseInsensitive)) {
+                    uint64_t nextLockout = bubble_vault_get_lockout_seconds(m_rustVault, path.toUtf8().constData());
+                    if (nextLockout > 0) {
+                        emit lockError(path, QString("Incorrect password. Locked for %1s.").arg(nextLockout));
+                    } else {
+                        emit accessDenied(path);
+                    }
+                } else {
+                    emit lockError(path, err);
+                }
+            } else {
+                emit accessDenied(path);
+            }
+            return false;
+        }
+    }
+
     VaultEntry entry = m_db->findByPath(path);
     if (entry.id == 0) {
         emit lockError(path, "Folder is not locked");
@@ -358,6 +512,13 @@ bool VaultService::sessionUnlockFolder(const QString &path, const QString &passw
 
 void VaultService::sessionRelockFolder(const QString &path)
 {
+    if (m_rustVault) {
+        bubble_vault_session_relock_folder(m_rustVault, path.toUtf8().constData());
+        m_activeSessions.remove(path);
+        emit sessionEnded(path);
+        return;
+    }
+
     if (!m_activeSessions.contains(path)) {
         return;
     }
@@ -399,6 +560,53 @@ void VaultService::sessionRelockFolder(const QString &path)
 
 bool VaultService::sessionUnlockFile(const QString &path, const QString &password)
 {
+    if (m_rustVault) {
+        if (!bubble_vault_is_locked(m_rustVault, path.toUtf8().constData())) {
+            emit lockError(path, "File is not locked");
+            return false;
+        }
+
+        uint64_t lockout = bubble_vault_get_lockout_seconds(m_rustVault, path.toUtf8().constData());
+        if (lockout > 0) {
+            emit lockError(path, QString("Too many failed attempts. Try again in %1s.").arg(lockout));
+            return false;
+        }
+
+        bool success = bubble_vault_session_unlock_file(m_rustVault, path.toUtf8().constData(), password.toUtf8().constData());
+        if (success) {
+            m_activeSessions.insert(path);
+            uint8_t dataKey[32] = {0};
+            if (bubble_vault_get_session_data_key(m_rustVault, path.toUtf8().constData(), dataKey, sizeof(dataKey))) {
+                ActiveFileSession session;
+                session.dataKey = QByteArray(reinterpret_cast<char*>(dataKey), 32);
+                session.filePath = path;
+                session.pid = 0;
+                m_activeFileSessions.insert(path, session);
+            }
+            emit sessionStarted(path);
+            return true;
+        } else {
+            char errBuf[256] = {0};
+            if (bubble_vault_last_error(m_rustVault, errBuf, sizeof(errBuf)) && errBuf[0]) {
+                QString err = QString::fromUtf8(errBuf);
+                m_lastError = err;
+                if (err.contains("Access Denied", Qt::CaseInsensitive) || err.contains("Incorrect password", Qt::CaseInsensitive)) {
+                    uint64_t nextLockout = bubble_vault_get_lockout_seconds(m_rustVault, path.toUtf8().constData());
+                    if (nextLockout > 0) {
+                        emit lockError(path, QString("Incorrect password. Locked for %1s.").arg(nextLockout));
+                    } else {
+                        emit accessDenied(path);
+                    }
+                } else {
+                    emit lockError(path, err);
+                }
+            } else {
+                emit accessDenied(path);
+            }
+            return false;
+        }
+    }
+
     VaultEntry entry = m_db->findByPath(path);
     if (entry.id == 0) {
         emit lockError(path, "File is not locked");
@@ -492,6 +700,15 @@ bool VaultService::sessionOpenFile(const QString &path, const QString &password)
 
 void VaultService::sessionRelockFile(const QString &path)
 {
+    if (m_rustVault) {
+        bubble_vault_session_relock_file(m_rustVault, path.toUtf8().constData());
+        m_activeFileSessions.remove(path);
+        m_activeSessions.remove(path);
+        emit itemLocked(path);
+        emit sessionEnded(path);
+        return;
+    }
+
     if (!m_activeFileSessions.contains(path)) {
         m_activeSessions.remove(path);
         return;
@@ -636,6 +853,13 @@ qint64 VaultService::launchDefaultApp(const QString &filePath)
 
 void VaultService::relockAllSessions()
 {
+    if (m_rustVault) {
+        bubble_vault_relock_all_sessions(m_rustVault);
+        m_activeFileSessions.clear();
+        m_activeSessions.clear();
+        return;
+    }
+
     QStringList fileSessions = m_activeFileSessions.keys();
     for (const QString &path : fileSessions) {
         sessionRelockFile(path);
@@ -661,6 +885,10 @@ bool VaultService::isPathBlocked(const QString &path) const
 
 bool VaultService::hasOwnPassword(const QString &path) const
 {
+    if (m_rustVault) {
+        return bubble_vault_has_own_password(m_rustVault, path.toUtf8().constData());
+    }
+
     VaultEntry entry = m_db->findByPath(path);
     if (entry.id != 0) {
         return entry.isOwnPassword;
@@ -670,6 +898,14 @@ bool VaultService::hasOwnPassword(const QString &path) const
 
 QSet<QString> VaultService::allLockedPaths() const
 {
+    if (m_rustVault) {
+        QSet<QString> paths;
+        bubble_vault_all_locked_paths(m_rustVault, [](const char *p, void *userData) {
+            reinterpret_cast<QSet<QString>*>(userData)->insert(QString::fromUtf8(p));
+        }, &paths);
+        return paths;
+    }
+
     QStringList paths = m_db->allLockedPaths();
     return QSet<QString>(paths.begin(), paths.end());
 }

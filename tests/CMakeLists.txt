@@ -357,7 +357,10 @@ target_link_libraries(tst_vault PRIVATE
     Qt6::Sql
     OpenSSL::Crypto
     PkgConfig::ARGON2
+    PkgConfig::SQLITE3
+    rust_bubble_core
 )
+add_dependencies(tst_vault cargo_bubble)
 add_test(NAME tst_vault COMMAND tst_vault)
 set_tests_properties(tst_vault PROPERTIES
     ENVIRONMENT "BUBBLE_TEST_MODE=1"

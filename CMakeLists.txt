@@ -4,6 +4,7 @@ project(bubble VERSION 0.6.1 LANGUAGES CXX)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0 gio-unix-2.0)
 pkg_check_modules(ARGON2 REQUIRED IMPORTED_TARGET libargon2)
+pkg_check_modules(SQLITE3 REQUIRED IMPORTED_TARGET sqlite3)
 find_package(OpenSSL REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -13,6 +14,23 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 DBus Svg Network Concurrent Sql)
 find_package(KF6WindowSystem QUIET)
+
+# Cargo build for Rust core library and helper binaries
+add_custom_target(cargo_bubble
+    COMMAND cargo build --offline --manifest-path "${CMAKE_SOURCE_DIR}/rust/Cargo.toml" --release
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/rust"
+    BYPRODUCTS
+        "${CMAKE_SOURCE_DIR}/rust/target/release/libbubble_core.a"
+        "${CMAKE_SOURCE_DIR}/rust/target/release/bubble-vault-helper"
+        "${CMAKE_SOURCE_DIR}/rust/target/release/bubble-vault-destroy"
+    COMMENT "Compiling Rust workspace (bubble-core, bubble-vault-helper, bubble-vault-destroy)..."
+)
+
+add_library(rust_bubble_core STATIC IMPORTED GLOBAL)
+set_target_properties(rust_bubble_core PROPERTIES
+    IMPORTED_LOCATION "${CMAKE_SOURCE_DIR}/rust/target/release/libbubble_core.a"
+)
+add_dependencies(rust_bubble_core cargo_bubble)
 
 add_subdirectory(src)
 
