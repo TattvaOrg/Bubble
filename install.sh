@@ -1,78 +1,72 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Bubble Installation & Management Script
+# Bubble Installation Script
 # ==============================================================================
-# A fast, keyboard-friendly file manager for Wayland.
+# A lightweight Qt6/QML file manager for Wayland.
 #
 # Usage:
-#   ./install.sh             # Install latest release binary to ~/.local (default)
-#   ./install.sh --update    # Update existing installation to latest release
-#   ./install.sh --uninstall # Remove Bubble and securely shred vault data
+#   ./install.sh             # Install for current user to ~/.local (default, no root needed)
 #   ./install.sh --system    # Install system-wide to /usr/local (requires sudo)
-#   ./install.sh --build     # Build from source using Cargo and CMake
+#   ./install.sh --prefix /opt/bubble  # Install to a custom directory
+#   ./install.sh --uninstall # Remove an existing installation
 # ==============================================================================
 
 set -euo pipefail
 
-REPO_OWNER="TattvaOrg"
-REPO_NAME="Bubble"
-GITHUB_REPO="${REPO_OWNER}/${REPO_NAME}"
+CLEANUP_TMP=0
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR="$(pwd)"
+fi
+
+if [[ ! -f "$SCRIPT_DIR/CMakeLists.txt" || ! -d "$SCRIPT_DIR/src" ]]; then
+    TMP_CLONE_DIR="$(mktemp -d /tmp/bubble-install-XXXXXX)"
+    echo "==> Fetching Bubble source repository to $TMP_CLONE_DIR..."
+    git clone --depth 1 --recursive https://github.com/TattvaOrg/Bubble.git "$TMP_CLONE_DIR"
+    SCRIPT_DIR="$TMP_CLONE_DIR"
+    CLEANUP_TMP=1
+fi
+cd "$SCRIPT_DIR"
 
 # Defaults
-ACTION="install"
 MODE="user"
 CUSTOM_PREFIX=""
-BUILD_FROM_SOURCE=0
+BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/build}"
 BUILD_TYPE="Release"
-AUTO_YES=0
-FORCE_REBUILD=0
 CHECK_DEPS=1
+AUTO_YES=0
+UNINSTALL=0
+FORCE_REBUILD=0
 
 print_usage() {
     cat <<USAGE
-Bubble Installer & Manager
+Bubble Installer
 
 Usage:
   ./install.sh [options]
-
-Actions:
-  (default)           Install Bubble binary from latest release
-  --update            Check for and apply latest update
-  --uninstall         Uninstall Bubble and securely clean up vault data
 
 Options:
   --user              Install for current user only (~/.local) [default]
   --system            Install system-wide (/usr/local, requires sudo)
   --prefix <path>     Install to custom prefix path
-  --from-source, -s   Build from source repository instead of downloading binary
-  --build             Alias for --from-source
-  --debug             Build in Debug mode instead of Release (source build only)
-  --rebuild           Force clean build before installing (source build only)
-  --no-deps           Skip dependency detection during source build
-  -y, --yes           Non-interactive mode, answer yes to all prompts
+  --build-dir <dir>   Specify build directory (default: ./build)
+  --debug             Build in Debug mode instead of Release
+  --rebuild           Force clean build before installing
+  --no-deps           Skip dependency detection and package installation
+  -y, --yes           Automatically install missing dependencies without prompting
+  --uninstall         Uninstall Bubble from target prefix
   -h, --help          Show this help message
 
-One-Liner Examples:
-  curl -sSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | bash
-  curl -sSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | bash -s -- --update
-  curl -sSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | bash -s -- --uninstall
+Examples:
+  ./install.sh                    # Recommended: Installs to ~/.local
+  sudo ./install.sh --system      # Installs to /usr/local
+  ./install.sh --uninstall        # Removes from ~/.local
 USAGE
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --install)
-            ACTION="install"
-            shift
-            ;;
-        --update)
-            ACTION="update"
-            shift
-            ;;
-        --uninstall)
-            ACTION="uninstall"
-            shift
-            ;;
         --user)
             MODE="user"
             shift
@@ -89,18 +83,20 @@ while [[ $# -gt 0 ]]; do
             CUSTOM_PREFIX="$2"
             shift 2
             ;;
-        --from-source|--build|-s)
-            BUILD_FROM_SOURCE=1
-            shift
+        --build-dir)
+            if [[ -z "${2:-}" ]]; then
+                echo "Error: --build-dir requires a path." >&2
+                exit 1
+            fi
+            BUILD_DIR="$2"
+            shift 2
             ;;
         --debug)
             BUILD_TYPE="Debug"
-            BUILD_FROM_SOURCE=1
             shift
             ;;
         --rebuild)
             FORCE_REBUILD=1
-            BUILD_FROM_SOURCE=1
             shift
             ;;
         --no-deps)
@@ -109,6 +105,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -y|--yes)
             AUTO_YES=1
+            shift
+            ;;
+        --uninstall)
+            UNINSTALL=1
             shift
             ;;
         -h|--help)
@@ -123,78 +123,50 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Resolve prefix
+# Determine target prefix
 if [[ -n "$CUSTOM_PREFIX" ]]; then
     PREFIX="$CUSTOM_PREFIX"
 elif [[ "$MODE" == "system" ]]; then
     PREFIX="/usr/local"
 else
-    PREFIX="${HOME}/.local"
+    PREFIX="${XDG_DATA_HOME:-$HOME/.local}"
 fi
 
-if [[ "$MODE" == "system" && $EUID -ne 0 ]]; then
-    echo "System-wide operations require root privileges. Please run with sudo or as root." >&2
-    exit 1
-fi
+# Handle uninstall
+if [[ $UNINSTALL -eq 1 ]]; then
+    echo "==> Uninstalling Bubble from prefix: $PREFIX"
 
-ARCH="$(uname -m)"
-if [[ "$ARCH" != "x86_64" ]]; then
-    echo "Notice: Precompiled binaries are currently provided for x86_64 Linux."
-    echo "Switching to build from source for $ARCH..."
-    BUILD_FROM_SOURCE=1
-fi
-
-# ==============================================================================
-# Uninstallation
-# ==============================================================================
-if [[ "$ACTION" == "uninstall" ]]; then
-    echo "=============================================="
-    echo "              Uninstalling Bubble             "
-    echo "=============================================="
-    echo "Target prefix: $PREFIX"
-    echo
-
-    if [[ $AUTO_YES -eq 0 ]]; then
-        read -r -p "Are you sure you want to uninstall Bubble from '$PREFIX'? [y/N] " confirm
-        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-            echo "Uninstall cancelled."
-            exit 0
-        fi
+    # Securely shred and destroy all locked vault files before removal
+    if command -v bubble-vault-destroy >/dev/null 2>&1; then
+        echo "==> Securely shredding locked vault files..."
+        bubble-vault-destroy || true
+    elif [[ -x "$PREFIX/bin/bubble-vault-destroy" ]]; then
+        echo "==> Securely shredding locked vault files..."
+        "$PREFIX/bin/bubble-vault-destroy" || true
     fi
 
-    # Vault destruction if vault files exist
-    VAULT_DESTROY_BIN=""
-    if [[ -x "$PREFIX/bin/bubble-vault-destroy" ]]; then
-        VAULT_DESTROY_BIN="$PREFIX/bin/bubble-vault-destroy"
-    elif command -v bubble-vault-destroy >/dev/null 2>&1; then
-        VAULT_DESTROY_BIN="$(command -v bubble-vault-destroy)"
-    fi
-
-    if [[ -n "$VAULT_DESTROY_BIN" ]]; then
-        echo "--> Checking for locked vault files..."
-        if [[ $AUTO_YES -eq 1 ]]; then
-            "$VAULT_DESTROY_BIN" || true
-        else
-            read -r -p "Do you want to securely shred locked vault files and remove the vault database? [y/N] " shred_confirm
-            if [[ "$shred_confirm" =~ ^[Yy]$ ]]; then
-                "$VAULT_DESTROY_BIN" || true
-            else
-                echo "Skipping vault shredding."
-            fi
-        fi
-    fi
-
-    echo "--> Removing installed files..."
     rm -f "$PREFIX/bin/bubble"
-    rm -f "$PREFIX/bin/hyprfm"
-    rm -f "$PREFIX/bin/bubble-vault-helper"
     rm -f "$PREFIX/bin/bubble-vault-destroy"
+    rm -f "$PREFIX/bin/bubble-vault-helper"
+    rm -f "$PREFIX/bin/hyprfm"
+    if [[ -f "/usr/local/bin/bubble-vault-helper" ]]; then
+        if [[ $EUID -eq 0 ]]; then
+            rm -f "/usr/local/bin/bubble-vault-helper"
+        elif command -v sudo >/dev/null 2>&1; then
+            sudo rm -f "/usr/local/bin/bubble-vault-helper" 2>/dev/null || true
+        fi
+    fi
     rm -rf "$PREFIX/share/bubble"
     rm -f "$PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
     rm -f "$PREFIX/share/applications/bubble.desktop"
     rm -f "$PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
     rm -f "$PREFIX/share/metainfo/io.github.soyeb_jim285.Bubble.metainfo.xml"
-    rm -f "/usr/local/bin/bubble-vault-helper" 2>/dev/null || true
+    rm -f "$PREFIX/share/libalpm/hooks/bubble-cleanup.hook"
+    rm -f "$PREFIX/share/polkit-1/actions/org.bubble.vault.policy"
+
+    if [[ -f "/usr/share/polkit-1/actions/org.bubble.vault.policy" && $EUID -eq 0 ]]; then
+        rm -f "/usr/share/polkit-1/actions/org.bubble.vault.policy"
+    fi
 
     if command -v gtk-update-icon-cache >/dev/null 2>&1; then
         gtk-update-icon-cache -f -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true
@@ -203,175 +175,222 @@ if [[ "$ACTION" == "uninstall" ]]; then
         update-desktop-database "$PREFIX/share/applications" 2>/dev/null || true
     fi
 
-    echo "Bubble has been cleanly uninstalled from $PREFIX."
+    echo "==> Bubble has been uninstalled successfully."
     exit 0
 fi
 
+echo "=============================================="
+echo "          Bubble Installation Setup           "
+echo "=============================================="
+echo " Target Prefix : $PREFIX"
+echo " Build Type    : $BUILD_TYPE"
+echo " Build Dir     : $BUILD_DIR"
+echo "=============================================="
+
+# Check permissions for system install
+if [[ "$MODE" == "system" || "$PREFIX" == /usr* || "$PREFIX" == /opt* ]]; then
+    if [[ $EUID -ne 0 ]]; then
+        echo "Error: Installing to '$PREFIX' requires root privileges." >&2
+        echo "Please rerun with: sudo ./install.sh $@" >&2
+        exit 1
+    fi
+fi
+
 # ==============================================================================
-# Helper: Fetch Release Info
+# Dependency Checking and Auto-Installation
 # ==============================================================================
-get_latest_release_info() {
-    local api_url="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
-    if command -v curl >/dev/null 2>&1; then
-        curl -sSL "$api_url"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -qO- "$api_url"
+detect_missing_dependencies() {
+    local missing=()
+
+    # Core build tools
+    for tool in cmake git; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            missing+=("$tool")
+        fi
+    done
+
+    # Ninja
+    if ! command -v ninja >/dev/null 2>&1 && ! command -v ninja-build >/dev/null 2>&1; then
+        missing+=("ninja")
+    fi
+
+    # Pkg-config
+    if ! command -v pkg-config >/dev/null 2>&1 && ! command -v pkgconf >/dev/null 2>&1; then
+        missing+=("pkg-config")
+    fi
+
+    # Compiler
+    if ! command -v g++ >/dev/null 2>&1 && ! command -v clang++ >/dev/null 2>&1; then
+        missing+=("c++-compiler")
+    fi
+
+    # Libraries check via pkg-config if available
+    local PKG_CMD=""
+    if command -v pkgconf >/dev/null 2>&1; then
+        PKG_CMD="pkgconf"
+    elif command -v pkg-config >/dev/null 2>&1; then
+        PKG_CMD="pkg-config"
+    fi
+
+    if [[ -n "$PKG_CMD" ]]; then
+        if ! "$PKG_CMD" --exists gio-2.0 gio-unix-2.0 2>/dev/null; then
+            missing+=("gio-2.0")
+        fi
+        if ! "$PKG_CMD" --exists libargon2 2>/dev/null; then
+            missing+=("libargon2")
+        fi
+        if ! "$PKG_CMD" --exists openssl 2>/dev/null; then
+            missing+=("openssl")
+        fi
     else
-        echo "Error: curl or wget is required to download binaries." >&2
-        return 1
+        missing+=("gio-2.0" "libargon2" "openssl")
     fi
+
+    # Qt6 Core / Quick
+    if ! cmake --find-package -DNAME=Qt6Core -DCOMPILER_ID=GNU -DLANGUAGE=CXX -DMODE=EXIST >/dev/null 2>&1 \
+       && ! cmake --find-package -DNAME=Qt6Core -DCOMPILER_ID=Clang -DLANGUAGE=CXX -DMODE=EXIST >/dev/null 2>&1 \
+       && ! command -v qmake6 >/dev/null 2>&1; then
+        if [[ ! -d "/usr/lib/cmake/Qt6" && ! -d "/usr/lib64/cmake/Qt6" && ! -d "/usr/local/lib/cmake/Qt6" ]]; then
+            missing+=("qt6")
+        fi
+    fi
+
+    echo "${missing[@]:-}"
 }
 
-install_from_binary_tarball() {
-    echo "--> Fetching latest release information from GitHub..."
-    local release_json
-    release_json="$(get_latest_release_info)" || return 1
+install_distro_dependencies() {
+    local OS_ID=""
+    local OS_LIKE=""
+    if [[ -f /etc/os-release ]]; then
+        # shellcheck disable=SC1091
+        source /etc/os-release
+        OS_ID="${ID:-}"
+        OS_LIKE="${ID_LIKE:-}"
+    fi
 
-    local tag_name
-    tag_name="$(echo "$release_json" | grep -m1 '"tag_name":' | sed -E 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/' || true)"
+    local install_cmd=""
+    local pkg_list=""
 
-    if [[ -z "$tag_name" ]]; then
-        echo "Warning: Unable to determine latest release tag from GitHub API."
+    if [[ "$OS_ID" =~ (arch|cachyos|manjaro|endeavouros|artix|garuda) || "$OS_LIKE" =~ arch ]]; then
+        install_cmd="pacman -S --needed"
+        pkg_list="cmake ninja git pkgconf gcc qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils openssl argon2 psmisc"
+    elif [[ "$OS_ID" =~ (debian|ubuntu|linuxmint|pop|elementary|zorin|kali) || "$OS_LIKE" =~ (debian|ubuntu) ]]; then
+        install_cmd="apt-get install -y"
+        pkg_list="cmake ninja-build git pkg-config g++ qt6-base-dev qt6-declarative-dev libqt6svg6-dev qt6-wayland libglib2.0-dev xdg-utils libssl-dev libargon2-dev libqt6sql6-sqlite psmisc"
+    elif [[ "$OS_ID" =~ (fedora|rhel|centos|rocky|alma) || "$OS_LIKE" =~ (fedora|rhel) ]]; then
+        install_cmd="dnf install -y"
+        pkg_list="cmake ninja-build git pkgconf-pkg-config gcc-c++ qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtwayland glib2-devel xdg-utils openssl-devel libargon2-devel qt6-qtbase-sqlite psmisc"
+    elif [[ "$OS_ID" =~ opensuse || "$OS_LIKE" =~ (suse|opensuse) ]]; then
+        install_cmd="zypper install -y"
+        pkg_list="cmake ninja git pkgconf gcc-c++ qt6-base-devel qt6-declarative-devel libqt6svg6-devel libQt6WaylandClient6 glib2-devel xdg-utils libopenssl-devel libargon2-devel psmisc"
+    elif [[ "$OS_ID" == "void" ]]; then
+        install_cmd="xbps-install -S -y"
+        pkg_list="cmake ninja git pkg-config gcc qt6-base-devel qt6-declarative-devel qt6-svg-devel qt6-wayland-devel glib-devel openssl-devel libargon2-devel psmisc"
+    else
+        echo "Warning: Could not automatically identify your Linux distribution ($OS_ID)." >&2
         return 1
     fi
 
-    local download_url
-    download_url="$(echo "$release_json" | grep "browser_download_url.*Bubble-.*${ARCH}-linux\.tar\.gz" | cut -d : -f 2,3 | tr -d ' "')"
+    echo "==> Required packages for your distribution ($OS_ID):"
+    echo "    $pkg_list"
+    echo
 
-    if [[ -z "$download_url" ]]; then
-        download_url="https://github.com/${GITHUB_REPO}/releases/download/${tag_name}/Bubble-${tag_name}-${ARCH}-linux.tar.gz"
-    fi
-
-    echo "--> Downloading precompiled release binary: ${tag_name} (${ARCH})..."
-    local tmp_dir
-    tmp_dir="$(mktemp -d /tmp/bubble-bin-XXXXXX)"
-
-    local tarball="$tmp_dir/bubble.tar.gz"
-    if command -v curl >/dev/null 2>&1; then
-        if ! curl -sSL -f "$download_url" -o "$tarball"; then
-            echo "Warning: Direct binary download failed from $download_url"
-            rm -rf "$tmp_dir"
-            return 1
+    local do_install=0
+    if [[ $AUTO_YES -eq 1 ]]; then
+        do_install=1
+    elif [[ -t 0 || -c /dev/tty ]]; then
+        local reply=""
+        if [[ -t 0 ]]; then
+            read -r -p "==> Install missing packages automatically with sudo? [Y/n] " reply
+        elif [[ -c /dev/tty ]]; then
+            read -r -p "==> Install missing packages automatically with sudo? [Y/n] " reply </dev/tty
         fi
-    elif command -v wget >/dev/null 2>&1; then
-        if ! wget -q "$download_url" -O "$tarball"; then
-            echo "Warning: Direct binary download failed from $download_url"
-            rm -rf "$tmp_dir"
-            return 1
+        if [[ -z "$reply" || "$reply" =~ ^[Yy]$ ]]; then
+            do_install=1
         fi
     fi
 
-    echo "--> Extracting into '$PREFIX'..."
-    mkdir -p "$PREFIX/bin" "$PREFIX/share/applications" "$PREFIX/share/icons/hicolor/scalable/apps" "$PREFIX/share/metainfo"
-    tar -xzf "$tarball" -C "$PREFIX"
-    rm -rf "$tmp_dir"
-
-    # Set permissions on helper
-    if [[ -x "$PREFIX/bin/bubble-vault-helper" ]]; then
+    if [[ $do_install -eq 1 ]]; then
+        echo "==> Installing dependencies..."
         if [[ $EUID -eq 0 ]]; then
-            chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
-            chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
-        elif command -v sudo >/dev/null 2>&1 && ( [[ $AUTO_YES -eq 1 ]] || sudo -n true 2>/dev/null ); then
-            sudo chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
-            sudo chmod 4755 "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
+            $install_cmd $pkg_list
+        else
+            sudo $install_cmd $pkg_list
         fi
+        return 0
+    else
+        echo "==> Please install the required dependencies manually using:"
+        if [[ $EUID -eq 0 ]]; then
+            echo "    $install_cmd $pkg_list"
+        else
+            echo "    sudo $install_cmd $pkg_list"
+        fi
+        exit 1
     fi
-
-    # Update databases
-    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-        gtk-update-icon-cache -f -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true
-    fi
-    if command -v update-desktop-database >/dev/null 2>&1; then
-        update-desktop-database "$PREFIX/share/applications" 2>/dev/null || true
-    fi
-
-    echo
-    echo "=============================================="
-    echo "   Bubble has been installed successfully!    "
-    echo "=============================================="
-    echo " Installed version: $tag_name"
-    echo " Main binary:       $PREFIX/bin/bubble"
-    echo " Vault helper:      $PREFIX/bin/bubble-vault-helper"
-    echo " Vault cleanup:     $PREFIX/bin/bubble-vault-destroy"
-    echo " Desktop entry:     $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
-    echo
-    return 0
 }
 
-# ==============================================================================
-# Update Action
-# ==============================================================================
-if [[ "$ACTION" == "update" ]]; then
-    echo "=============================================="
-    echo "              Updating Bubble                 "
-    echo "=============================================="
-
-    INSTALLED_VER="none"
-    if command -v "$PREFIX/bin/bubble" >/dev/null 2>&1; then
-        INSTALLED_VER="$("$PREFIX/bin/bubble" --version 2>/dev/null | head -n1 || echo 'unknown')"
-    fi
-    echo "Current installation: $INSTALLED_VER"
-
-    if [[ $BUILD_FROM_SOURCE -eq 0 ]]; then
-        if install_from_binary_tarball; then
-            exit 0
-        fi
-        echo "Notice: Falling back to source update..."
+if [[ $CHECK_DEPS -eq 1 ]]; then
+    echo "==> Checking build dependencies..."
+    MISSING_RAW="$(detect_missing_dependencies)"
+    if [[ -n "$MISSING_RAW" ]]; then
+        echo "==> Detected missing dependencies: $MISSING_RAW"
+        install_distro_dependencies
+    else
+        echo "==> All required build dependencies are satisfied."
     fi
 fi
 
 # ==============================================================================
-# Installation (Binary first, then source fallback)
+# Submodule Verification & Recovery
 # ==============================================================================
-if [[ $BUILD_FROM_SOURCE -eq 0 ]]; then
-    if install_from_binary_tarball; then
-        exit 0
-    fi
-    echo "Notice: Binary release installation unavailable. Proceeding with source build..."
-fi
-
-# ==============================================================================
-# Source Build Flow
-# ==============================================================================
-CLEANUP_TMP=0
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ ! -f "$SCRIPT_DIR/CMakeLists.txt" || ! -d "$SCRIPT_DIR/src" ]]; then
-    TMP_CLONE_DIR="$(mktemp -d /tmp/bubble-source-XXXXXX)"
-    echo "--> Cloning Bubble repository into $TMP_CLONE_DIR..."
-    git clone --depth 1 --recursive "https://github.com/${GITHUB_REPO}.git" "$TMP_CLONE_DIR"
-    SCRIPT_DIR="$TMP_CLONE_DIR"
-    CLEANUP_TMP=1
-fi
-cd "$SCRIPT_DIR"
-
-# Ensure submodules
-if [[ ! -f "$SCRIPT_DIR/src/qml/Quill/qmldir" || ! -f "$SCRIPT_DIR/src/qml/icons/qmldir" ]]; then
-    echo "--> Initializing Git submodules..."
+echo "==> Verifying UI submodules (Quill & icons)..."
+if [[ -d "$SCRIPT_DIR/.git" ]]; then
     git submodule update --init --recursive
 fi
 
-BUILD_DIR="${BUILD_DIR:-$SCRIPT_DIR/build}"
+# Fallback in case submodules weren't cloned recursively or .git is missing
+if [[ ! -f "$SCRIPT_DIR/src/qml/Quill/qmldir" ]]; then
+    echo "==> Fetching Quill UI components..."
+    rm -rf "$SCRIPT_DIR/src/qml/Quill"
+    git clone --depth 1 https://github.com/soyeb-jim285/quill.git "$SCRIPT_DIR/src/qml/Quill"
+fi
+
+if [[ ! -f "$SCRIPT_DIR/src/qml/icons/qmldir" ]]; then
+    echo "==> Fetching icon set components..."
+    rm -rf "$SCRIPT_DIR/src/qml/icons"
+    git clone --depth 1 https://github.com/soyeb-jim285/quill-icons.git "$SCRIPT_DIR/src/qml/icons"
+fi
+
+# ==============================================================================
+# Configure & Build
+# ==============================================================================
 if [[ $FORCE_REBUILD -eq 1 && -d "$BUILD_DIR" ]]; then
-    echo "--> Cleaning previous build..."
+    echo "==> Cleaning existing build directory..."
     rm -rf "$BUILD_DIR"
 fi
 
-echo "--> Compiling Rust workspace..."
-cargo build --release --workspace
-
-echo "--> Configuring CMake build..."
+echo "==> Configuring CMake..."
 cmake -B "$BUILD_DIR" -S "$SCRIPT_DIR" -G Ninja \
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
     -DBUILD_TESTS=OFF \
     -DBUBBLE_DATA_DIR="$PREFIX/share/bubble"
 
-echo "--> Building Bubble..."
+echo "==> Building Bubble..."
 cmake --build "$BUILD_DIR" --parallel
 
-echo "--> Installing Bubble into '$PREFIX'..."
+echo "==> Installing Bubble to '$PREFIX'..."
 cmake --install "$BUILD_DIR" --prefix "$PREFIX"
 
+# Additional integrations
+mkdir -p "$PREFIX/bin" "$PREFIX/share/applications"
+
+# Backward-compatibility symlink: hyprfm -> bubble
+ln -sf bubble "$PREFIX/bin/hyprfm"
+# Clean up old legacy bubble.desktop if present to prevent duplicate application menu entries
+rm -f "$PREFIX/share/applications/bubble.desktop"
+
+# Setuid permissions for bubble-vault-helper (kernel immutable attribute protection against sudo)
 if [[ -x "$PREFIX/bin/bubble-vault-helper" ]]; then
     if [[ $EUID -eq 0 ]]; then
         chown root:root "$PREFIX/bin/bubble-vault-helper" 2>/dev/null || true
@@ -382,6 +401,24 @@ if [[ -x "$PREFIX/bin/bubble-vault-helper" ]]; then
     fi
 fi
 
+# If installing in user mode but sudo is available, install a setuid copy to /usr/local/bin
+# so that kernel immutable attributes (+i) protect locked files from sudo/root operations
+if [[ "$MODE" == "user" && -x "$PREFIX/bin/bubble-vault-helper" && ! -x "/usr/local/bin/bubble-vault-helper" ]]; then
+    if [[ $EUID -eq 0 ]]; then
+        install -m 4755 -o root -g root "$PREFIX/bin/bubble-vault-helper" /usr/local/bin/bubble-vault-helper 2>/dev/null || true
+    elif command -v sudo >/dev/null 2>&1 && ( [[ $AUTO_YES -eq 1 ]] || sudo -n true 2>/dev/null ); then
+        sudo install -m 4755 -o root -g root "$PREFIX/bin/bubble-vault-helper" /usr/local/bin/bubble-vault-helper 2>/dev/null || true
+    fi
+fi
+
+# Polkit policy for system installations
+if [[ "$MODE" == "system" || "$PREFIX" == /usr* ]]; then
+    if [[ -d "/usr/share/polkit-1/actions" && $EUID -eq 0 ]]; then
+        install -Dm644 "$SCRIPT_DIR/dist/org.bubble.vault.policy" "/usr/share/polkit-1/actions/org.bubble.vault.policy" 2>/dev/null || true
+    fi
+fi
+
+# Update desktop and icon databases if available
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -f -t "$PREFIX/share/icons/hicolor" 2>/dev/null || true
 fi
@@ -394,18 +431,23 @@ echo "=============================================="
 echo "    Bubble has been successfully installed!   "
 echo "=============================================="
 echo " Binary installed to: $PREFIX/bin/bubble"
-echo " Vault cleanup:       $PREFIX/bin/bubble-vault-destroy"
-echo " Vault helper:        $PREFIX/bin/bubble-vault-helper"
+echo " Vault cleanup binary: $PREFIX/bin/bubble-vault-destroy"
+echo " Vault helper binary:  $PREFIX/bin/bubble-vault-helper"
+echo " Legacy alias:        $PREFIX/bin/hyprfm"
 echo " Desktop file:        $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
 echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
 echo
 
+# Path check for user mode
 if [[ "$MODE" == "user" && ":$PATH:" != *":$PREFIX/bin:"* ]]; then
-    echo "Note: '$PREFIX/bin' is not currently in your PATH."
-    echo "Add this to your ~/.bashrc or ~/.zshrc:"
+    echo "NOTE: '$PREFIX/bin' is not in your PATH."
+    echo "To run 'bubble' from any terminal, add this to your ~/.bashrc or ~/.zshrc:"
+    echo
     echo "  export PATH=\"$PREFIX/bin:\$PATH\""
     echo
 fi
+
+echo "You can now launch Bubble by running: bubble"
 
 if [[ $CLEANUP_TMP -eq 1 ]]; then
     rm -rf "$SCRIPT_DIR"

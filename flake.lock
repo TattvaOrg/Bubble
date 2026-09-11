@@ -1,0 +1,63 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1787498568,
+        "narHash": "sha256-9i/VTdusq/+NM/tz+J1Re+ojkMB8MBf0QshnYfzHz30=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "56c02bc00adcf003215cc4bd996d6efaf4cff188",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "quill": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787841127,
+        "narHash": "sha256-OhtKC8pL2tABEpvIo+DJUlXXz7wuVvxGA84FRW8aVaY=",
+        "owner": "soyeb-jim285",
+        "repo": "quill",
+        "rev": "ad1785f108ea47b8950cbebcd6dd557ce84e4879",
+        "type": "github"
+      },
+      "original": {
+        "owner": "soyeb-jim285",
+        "repo": "quill",
+        "rev": "ad1785f108ea47b8950cbebcd6dd557ce84e4879",
+        "type": "github"
+      }
+    },
+    "quill-icons": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1776191081,
+        "narHash": "sha256-ezwie0hSHNT0m65dgTgwwh16vfb/vAshcNaccQChnzM=",
+        "owner": "soyeb-jim285",
+        "repo": "quill-icons",
+        "rev": "10db5facf6a560e60d2693ccd1909267ef436002",
+        "type": "github"
+      },
+      "original": {
+        "owner": "soyeb-jim285",
+        "repo": "quill-icons",
+        "rev": "10db5facf6a560e60d2693ccd1909267ef436002",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "quill": "quill",
+        "quill-icons": "quill-icons"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
