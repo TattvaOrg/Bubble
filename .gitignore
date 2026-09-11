@@ -1,7 +1,4 @@
 build/
-build-*/
-rust/target/
-target/
 result
 .cache/
 .superpowers/
@@ -15,4 +12,3 @@ docs/*
 !docs/screenshots/
 CMakeFiles/
 CMakeCache.txt
-

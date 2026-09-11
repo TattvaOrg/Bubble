@@ -1,0 +1,1326 @@
+#include <QTest>
+#include <QStorageInfo>
+#include <QSignalSpy>
+#include <QLocale>
+#include <QStandardPaths>
+#include <QAbstractItemModelTester>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QProcess>
+#include <QUuid>
+#include "models/filesystemmodel.h"
+#include "services/xdgtrash.h"
+#include "services/gitstatusservice.h"
+#include "testdir.h"
+
+class TestFileSystemModel : public QObject
+{
+    Q_OBJECT
+
+private slots:
+    void initTestCase()
+    {
+        QStandardPaths::setTestModeEnabled(true);
+    }
+
+    // 1. Initial state
+    void testInitialState()
+    {
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QVERIFY(model.rootPath().isEmpty());
+        QCOMPARE(model.rowCount(), 0);
+        QCOMPARE(model.fileCount(), 0);
+        QCOMPARE(model.folderCount(), 0);
+        QCOMPARE(model.showHidden(), false);
+    }
+
+    void testGitStatusDisablesRepositoryFsmonitor()
+    {
+        if (QStandardPaths::findExecutable("git").isEmpty())
+            QSKIP("git not found in PATH");
+
+        TestDir repo;
+        const QString markerPath = repo.path() + "/PWNED";
+        const QString monitorPath = repo.path() + "/fsmonitor";
+        QFile monitor(monitorPath);
+        QVERIFY(monitor.open(QIODevice::WriteOnly));
+        monitor.write("#!/bin/sh\n: > PWNED\n");
+        monitor.close();
+        QVERIFY(monitor.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                       | QFileDevice::ExeOwner));
+
+        QProcess git;
+        git.setWorkingDirectory(repo.path());
+        git.start("git", {"init", "-q"});
+        QVERIFY(git.waitForFinished(5000));
+        QCOMPARE(git.exitCode(), 0);
+        git.start("git", {"config", "core.fsmonitor", monitorPath});
+        QVERIFY(git.waitForFinished(5000));
+        QCOMPARE(git.exitCode(), 0);
+
+        GitStatusService service;
+        QSignalSpy statusSpy(&service, &GitStatusService::statusChanged);
+        service.setRootPath(repo.path());
+
+        QVERIFY(statusSpy.wait(5000));
+        QVERIFY(!QFileInfo::exists(markerPath));
+    }
+
+    void testGitStatusNeverRewritesTheIndex()
+    {
+        if (QStandardPaths::findExecutable("git").isEmpty())
+            QSKIP("git not found in PATH");
+
+        TestDir repo;
+        repo.createFile("tracked.txt", "v1");
+        QProcess git;
+        git.setWorkingDirectory(repo.path());
+        for (const QStringList &args : {QStringList{"init", "-q"},
+                                        QStringList{"-c", "user.name=t", "-c", "user.email=t@t", "add", "."},
+                                        QStringList{"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x"}}) {
+            git.start("git", args);
+            QVERIFY(git.waitForFinished(5000));
+            QCOMPARE(git.exitCode(), 0);
+        }
+        // Make the cached stat data stale so a plain `git status` would take
+        // .git/index.lock and rewrite the index. A SIGKILL mid-write (app
+        // exit) would leave the lock behind; --no-optional-locks avoids it.
+        const QDateTime old = QDateTime::currentDateTime().addDays(-1);
+        QFile tracked(repo.path() + "/tracked.txt");
+        QVERIFY(tracked.open(QIODevice::ReadWrite));
+        QVERIFY(tracked.setFileTime(old, QFileDevice::FileModificationTime));
+        tracked.close();
+        QFile index(repo.path() + "/.git/index");
+        QVERIFY(index.open(QIODevice::ReadWrite));
+        QVERIFY(index.setFileTime(old, QFileDevice::FileModificationTime));
+        index.close();
+
+        GitStatusService service;
+        QSignalSpy statusSpy(&service, &GitStatusService::statusChanged);
+        service.setRootPath(repo.path());
+        QVERIFY(statusSpy.wait(5000));
+
+        QCOMPARE(QFileInfo(repo.path() + "/.git/index").lastModified().toSecsSinceEpoch(),
+                 old.toSecsSinceEpoch());
+    }
+
+    // 2. homePath()
+    void testHomePath()
+    {
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QCOMPARE(model.homePath(), QDir::homePath());
+    }
+
+    // 3. setRootPath loads entries and emits rootPathChanged
+    void testSetRootPath()
+    {
+        TestDir dir;
+        dir.createFile("alpha.txt", "hello");
+        dir.createFile("beta.txt", "world");
+        dir.createDir("subdir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QSignalSpy rootSpy(&model, &FileSystemModel::rootPathChanged);
+        QSignalSpy countSpy(&model, &FileSystemModel::countsChanged);
+
+        model.setRootPath(dir.path());
+
+        QCOMPARE(rootSpy.count(), 1);
+        QVERIFY(countSpy.count() >= 1);
+        QCOMPARE(model.rootPath(), dir.path());
+        QCOMPARE(model.rowCount(), 3);
+        QCOMPARE(model.fileCount(), 2);
+        QCOMPARE(model.folderCount(), 1);
+    }
+
+    // 4. setRootPath same path emits no signal
+    void testWatcherBurstCoalescesIntoOneRefresh()
+    {
+        TestDir dir;
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        QSignalSpy reloadSpy(&model, &FileSystemModel::countsChanged);
+
+        for (int i = 0; i < 20; ++i) {
+            dir.createFile(QString("f%1.txt").arg(i));
+            QCoreApplication::processEvents();
+        }
+        QTest::qWait(600);
+
+        QCOMPARE(model.rowCount(), 20);
+        QVERIFY2(reloadSpy.count() <= 2, qPrintable(QString("%1 reloads").arg(reloadSpy.count())));
+    }
+
+    void testSetRootPathSamePath()
+    {
+        TestDir dir;
+        dir.createFile("file.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QSignalSpy rootSpy(&model, &FileSystemModel::rootPathChanged);
+        model.setRootPath(dir.path());
+
+        QCOMPARE(rootSpy.count(), 0);
+    }
+
+    void testRemoteRootPathPreservesAuthorityCase()
+    {
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        const QString uri = QStringLiteral("gphoto2://Apple_Inc._iPhone_ABC123/");
+
+        model.setRootPath(uri);
+
+        QCOMPARE(model.rootPath(), uri);
+    }
+
+    // 5. Empty root path yields 0 rows
+    void testEmptyRootPath()
+    {
+        TestDir dir;
+        dir.createFile("file.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        QVERIFY(model.rowCount() > 0);
+
+        model.setRootPath(QString());
+        QCOMPARE(model.rowCount(), 0);
+    }
+
+    // 6. Empty directory yields 0 rows, 0 counts
+    void testEmptyDirectory()
+    {
+        TestDir dir;
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QCOMPARE(model.rowCount(), 0);
+        QCOMPARE(model.fileCount(), 0);
+        QCOMPARE(model.folderCount(), 0);
+    }
+
+    void testUnifiedTrashRoot()
+    {
+        if (QStandardPaths::findExecutable("gio").isEmpty())
+            QSKIP("gio not found in PATH");
+
+        const QString fileName = "bubble-trash-model-" + QUuid::createUuid().toString(QUuid::WithoutBraces) + ".txt";
+        const QString dirPath = QDir::homePath() + "/.cache/bubble-test-trash-model";
+        QDir().mkpath(dirPath);
+        const QString filePath = dirPath + "/" + fileName;
+
+        QFile file(filePath);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("trash model");
+        file.close();
+
+        QProcess trashProc;
+        trashProc.start("gio", {"trash", filePath});
+        if (!trashProc.waitForFinished(5000) || trashProc.exitCode() != 0)
+            QSKIP("gio trash failed in this environment");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath("trash:///");
+
+        QString found;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            if (model.fileName(i) == fileName) {
+                found = model.filePath(i);
+                break;
+            }
+        }
+
+        QVERIFY(!found.isEmpty());
+        // Trash rows carry the real path under <trash>/files, not a trash://
+        // URI: that is what lets delete, restore and preview work without a
+        // gvfs session daemon.
+        QVERIFY(!found.startsWith("trash:///"));
+        QVERIFY(QFileInfo(found).isAbsolute());
+        QVERIFY(found.contains("/Trash/files/"));
+        QVERIFY(QFileInfo::exists(found));
+
+        const QVariantMap props = model.fileProperties(found);
+        QCOMPARE(props.value("name").toString(), fileName);
+        QCOMPARE(props.value("originalPath").toString(), filePath);
+        QVERIFY(props.value("isTrashItem").toBool());
+
+        QVERIFY(QFile::remove(found));
+        XdgTrash::removeInfo(found);
+    }
+
+    // 7. Hidden files
+    void testHiddenFilesNotShownByDefault()
+    {
+        TestDir dir;
+        dir.createFile("visible.txt");
+        dir.createFile(".hidden");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QCOMPARE(model.rowCount(), 1);
+
+        QSignalSpy spy(&model, &FileSystemModel::showHiddenChanged);
+        model.setShowHidden(true);
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(model.rowCount(), 2);
+    }
+
+    void testHiddenFilesToggleBack()
+    {
+        TestDir dir;
+        dir.createFile("visible.txt");
+        dir.createFile(".hidden");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        model.setShowHidden(true);
+        QCOMPARE(model.rowCount(), 2);
+
+        model.setShowHidden(false);
+        QCOMPARE(model.rowCount(), 1);
+    }
+
+    void testSetShowHiddenSameValueNoSignal()
+    {
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QCOMPARE(model.showHidden(), false);
+
+        QSignalSpy spy(&model, &FileSystemModel::showHiddenChanged);
+        model.setShowHidden(false);
+        QCOMPARE(spy.count(), 0);
+
+        model.setShowHidden(true);
+        QCOMPARE(spy.count(), 1);
+
+        model.setShowHidden(true);
+        QCOMPARE(spy.count(), 1);
+    }
+
+    // 8. All role data
+    void testRoleDataFileName()
+    {
+        TestDir dir;
+        dir.createFile("hello.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QModelIndex idx = model.index(0);
+        QCOMPARE(model.data(idx, FileSystemModel::FileNameRole).toString(), QString("hello.txt"));
+    }
+
+    void testRoleDataFilePath()
+    {
+        TestDir dir;
+        QString fullPath = dir.createFile("hello.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QModelIndex idx = model.index(0);
+        QCOMPARE(model.data(idx, FileSystemModel::FilePathRole).toString(), fullPath);
+    }
+
+    void testSortByNameIsNaturalOrder()
+    {
+        TestDir dir;
+        dir.createFiles({"file10.txt", "file2.txt", "File1.txt"});
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        model.sortByColumn("name", true);
+
+        QStringList names;
+        for (int i = 0; i < model.rowCount(); ++i)
+            names << model.data(model.index(i), FileSystemModel::FileNameRole).toString();
+        QCOMPARE(names, QStringList({"File1.txt", "file2.txt", "file10.txt"}));
+    }
+
+    void testSizeTextUsesLocaleDecimalSeparator()
+    {
+        TestDir dir;
+        dir.createFile("data.bin", QByteArray(1536, 'x'));
+
+        QLocale::setDefault(QLocale(QLocale::German, QLocale::Germany));
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        const QString text = model.data(model.index(0), FileSystemModel::FileSizeTextRole).toString();
+        QLocale::setDefault(QLocale::c());
+
+        QCOMPARE(text, QString("1,5 KB"));
+    }
+
+    void testRoleDataFileSizeForFile()
+    {
+        TestDir dir;
+        dir.createFile("data.txt", QByteArray(500, 'x'));
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QModelIndex idx = model.index(0);
+        QCOMPARE(model.data(idx, FileSystemModel::FileSizeRole).toLongLong(), qint64(500));
+    }
+
+    void testRoleDataFileSizeForDir()
+    {
+        TestDir dir;
+        dir.createDir("subdir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        // Find the directory row
+        int dirRow = -1;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            if (model.isDir(i)) { dirRow = i; break; }
+        }
+        QVERIFY(dirRow >= 0);
+        QModelIndex idx = model.index(dirRow);
+        QCOMPARE(model.data(idx, FileSystemModel::FileSizeRole).toLongLong(), qint64(-1));
+    }
+
+    void testRoleDataFileSizeText_data()
+    {
+        QTest::addColumn<int>("size");
+        QTest::addColumn<QString>("expected");
+
+        QTest::newRow("bytes")     << 512         << "512 B";
+        QTest::newRow("kilobytes") << 2048         << "2.0 KB";
+        QTest::newRow("megabytes") << (3 * 1024 * 1024) << "3.0 MB";
+    }
+
+    void testRoleDataFileSizeText()
+    {
+        QFETCH(int, size);
+        QFETCH(QString, expected);
+
+        TestDir dir;
+        dir.createFile("file.bin", QByteArray(size, 'a'));
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QCOMPARE(model.rowCount(), 1);
+        QModelIndex idx = model.index(0);
+        QCOMPARE(model.data(idx, FileSystemModel::FileSizeTextRole).toString(), expected);
+    }
+
+    void testRoleDataFileSizeTextDirEmpty()
+    {
+        TestDir dir;
+        dir.createDir("emptydir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        int dirRow = -1;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            if (model.isDir(i)) { dirRow = i; break; }
+        }
+        QVERIFY(dirRow >= 0);
+        QModelIndex idx = model.index(dirRow);
+        QCOMPARE(model.data(idx, FileSystemModel::FileSizeTextRole).toString(), QString());
+    }
+
+    void testRoleDataFileTypeFolder()
+    {
+        TestDir dir;
+        dir.createDir("mydir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        int dirRow = -1;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            if (model.isDir(i)) { dirRow = i; break; }
+        }
+        QVERIFY(dirRow >= 0);
+        QModelIndex idx = model.index(dirRow);
+        QCOMPARE(model.data(idx, FileSystemModel::FileTypeRole).toString(), QString("folder"));
+    }
+
+    void testRoleDataFileTypeExtension()
+    {
+        TestDir dir;
+        // Write a real PNG header so QMimeDatabase can identify the file
+        // by content (the file type role goes through QMimeDatabase now,
+        // not a hand-maintained suffix table).
+        dir.createFile("image.PNG",
+                       QByteArray::fromHex("89504E470D0A1A0A"));
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QModelIndex idx = model.index(0);
+        const QString fileType = model.data(idx, FileSystemModel::FileTypeRole).toString();
+        // FileTypeRole now returns the human-readable MIME comment
+        // (e.g. "PNG image"). Verify it's non-empty and references PNG
+        // rather than asserting an exact string.
+        QVERIFY(!fileType.isEmpty());
+        QVERIFY2(fileType.contains("PNG", Qt::CaseInsensitive)
+                 || fileType.contains("image", Qt::CaseInsensitive),
+                 qPrintable(fileType));
+    }
+
+    void testRoleDataFileModified()
+    {
+        TestDir dir;
+        dir.createFile("mod.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QModelIndex idx = model.index(0);
+        QVariant v = model.data(idx, FileSystemModel::FileModifiedRole);
+        QVERIFY(v.isValid());
+        QVERIFY(v.toDateTime().isValid());
+    }
+
+    void testRoleDataFileModifiedText()
+    {
+        TestDir dir;
+        dir.createFile("mod.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QModelIndex idx = model.index(0);
+        QString text = model.data(idx, FileSystemModel::FileModifiedTextRole).toString();
+        QVERIFY(!text.isEmpty());
+    }
+
+    void testRoleDataExtendedColumns()
+    {
+        TestDir dir;
+        dir.createFile("archive.tar.gz", "data");
+        dir.createSymlink(dir.path() + "/archive.tar.gz", "link");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        const QModelIndex file = model.index(0);
+        QCOMPARE(model.data(file, FileSystemModel::FileNameRole).toString(), QString("archive.tar.gz"));
+        QCOMPARE(model.data(file, FileSystemModel::FileOwnerRole).toString(), QFileInfo(dir.path()).owner());
+        QCOMPARE(model.data(file, FileSystemModel::FileGroupRole).toString(), QFileInfo(dir.path()).group());
+        QCOMPARE(model.data(file, FileSystemModel::FileExtensionRole).toString(), QString("gz"));
+        QCOMPARE(model.data(file, FileSystemModel::MimeTypeRole).toString(), QString("application/x-compressed-tar"));
+        QVERIFY(!model.data(file, FileSystemModel::FileCreatedTextRole).toString().isEmpty());
+        QVERIFY(!model.data(file, FileSystemModel::FileAccessedTextRole).toString().isEmpty());
+        QCOMPARE(model.data(file, FileSystemModel::SymlinkTargetRole).toString(), QString());
+
+        const QModelIndex link = model.index(1);
+        QCOMPARE(model.data(link, FileSystemModel::SymlinkTargetRole).toString(), dir.path() + "/archive.tar.gz");
+    }
+
+    void testRoleDataFilePermissions()
+    {
+        TestDir dir;
+        dir.createFile("perm.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QModelIndex idx = model.index(0);
+        QString perms = model.data(idx, FileSystemModel::FilePermissionsRole).toString();
+        QCOMPARE(perms.length(), 9);
+        // Owner typically has read+write
+        QVERIFY(perms.startsWith("rw"));
+    }
+
+    void testRoleDataIsDir()
+    {
+        TestDir dir;
+        dir.createFile("file.txt");
+        dir.createDir("subdir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        bool foundFile = false, foundDir = false;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            QModelIndex idx = model.index(i);
+            bool isDir = model.data(idx, FileSystemModel::IsDirRole).toBool();
+            if (model.fileName(i) == "file.txt") {
+                QVERIFY(!isDir);
+                foundFile = true;
+            } else if (model.fileName(i) == "subdir") {
+                QVERIFY(isDir);
+                foundDir = true;
+            }
+        }
+        QVERIFY(foundFile);
+        QVERIFY(foundDir);
+    }
+
+    void testRoleDataIsSymlink()
+    {
+        TestDir dir;
+        QString target = dir.createFile("real.txt");
+        dir.createSymlink(target, "link.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        bool foundSymlink = false;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            if (model.fileName(i) == "link.txt") {
+                QModelIndex idx = model.index(i);
+                QVERIFY(model.data(idx, FileSystemModel::IsSymlinkRole).toBool());
+                foundSymlink = true;
+            }
+        }
+        QVERIFY(foundSymlink);
+    }
+
+    void testRoleDataFileIconName_data()
+    {
+        // The icon role now goes through QMimeDatabase + mime.iconName(),
+        // which returns specific names like "image-png" rather than the
+        // generic "image-x-generic" the old hand-maintained suffix table
+        // used. To stay robust against MIME database differences across
+        // distros, we assert on the icon *family* (the prefix before the
+        // first hyphen) rather than the exact name.
+        QTest::addColumn<QString>("filename");
+        QTest::addColumn<QString>("expectedFamily");
+
+        QTest::newRow("png")  << "photo.png"  << "image";
+        QTest::newRow("jpg")  << "photo.jpg"  << "image";
+        QTest::newRow("mp3")  << "song.mp3"   << "audio";
+        QTest::newRow("mp4")  << "video.mp4"  << "video";
+        QTest::newRow("pdf")  << "doc.pdf"    << "application";
+        QTest::newRow("zip")  << "arch.zip"   << "application";
+        QTest::newRow("txt")  << "readme.txt" << "text";
+        QTest::newRow("html") << "page.html"  << "text";
+        QTest::newRow("css")  << "style.css"  << "text";
+    }
+
+    void testRoleDataFileIconName()
+    {
+        QFETCH(QString, filename);
+        QFETCH(QString, expectedFamily);
+
+        TestDir dir;
+        // Write a few bytes so MIME detection has something to work with
+        // (an empty file gets classified as application/x-zerosize, which
+        // would mask the extension-based result we actually want to test).
+        dir.createFile(filename, QByteArray("placeholder"));
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QCOMPARE(model.rowCount(), 1);
+        QModelIndex idx = model.index(0);
+        const QString icon = model.data(idx, FileSystemModel::FileIconNameRole).toString();
+        QVERIFY2(icon.startsWith(expectedFamily + "-") || icon == expectedFamily,
+                 qPrintable(QString("expected family '%1', got '%2'")
+                            .arg(expectedFamily, icon)));
+    }
+
+    void testRoleDataFileIconNameDir()
+    {
+        TestDir dir;
+        dir.createDir("mydir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        int dirRow = -1;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            if (model.isDir(i)) { dirRow = i; break; }
+        }
+        QVERIFY(dirRow >= 0);
+        QModelIndex idx = model.index(dirRow);
+        QCOMPARE(model.data(idx, FileSystemModel::FileIconNameRole).toString(), QString("folder"));
+    }
+
+    void testDirSizeTextRoleReturnsEmpty()
+    {
+        TestDir dir;
+        dir.createDir("subdir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        int dirRow = -1;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            if (model.isDir(i)) { dirRow = i; break; }
+        }
+        QVERIFY(dirRow >= 0);
+        QModelIndex idx = model.index(dirRow);
+        // FileSizeTextRole returns empty string for directories
+        QCOMPARE(model.data(idx, FileSystemModel::FileSizeTextRole).toString(), QString());
+    }
+
+    // 9. Invalid/out-of-bounds index returns empty QVariant
+    void testInvalidIndexReturnsEmpty()
+    {
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+
+        QModelIndex invalid;
+        QVERIFY(!model.data(invalid, FileSystemModel::FileNameRole).isValid());
+
+        TestDir dir;
+        dir.createFile("file.txt");
+        model.setRootPath(dir.path());
+
+        QModelIndex outOfBounds = model.index(999);
+        QVERIFY(!model.data(outOfBounds, FileSystemModel::FileNameRole).isValid());
+    }
+
+    // 10. filePath(), isDir(), fileName() accessor methods
+    void testAccessorMethodsValid()
+    {
+        TestDir dir;
+        QString filePath = dir.createFile("test.txt");
+        dir.createDir("mydir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QCOMPARE(model.rowCount(), 2);
+
+        // Find file and dir rows
+        int fileRow = -1, dirRow = -1;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            if (model.isDir(i))
+                dirRow = i;
+            else
+                fileRow = i;
+        }
+        QVERIFY(fileRow >= 0);
+        QVERIFY(dirRow >= 0);
+
+        QCOMPARE(model.fileName(fileRow), QString("test.txt"));
+        QCOMPARE(model.filePath(fileRow), filePath);
+        QVERIFY(!model.isDir(fileRow));
+
+        QCOMPARE(model.fileName(dirRow), QString("mydir"));
+        QVERIFY(model.filePath(dirRow).endsWith("mydir"));
+        QVERIFY(model.isDir(dirRow));
+    }
+
+    void testAccessorMethodsOutOfBounds()
+    {
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+
+        QVERIFY(model.filePath(-1).isEmpty());
+        QVERIFY(model.filePath(0).isEmpty());
+        QVERIFY(model.fileName(-1).isEmpty());
+        QVERIFY(model.fileName(0).isEmpty());
+        QVERIFY(!model.isDir(-1));
+        QVERIFY(!model.isDir(0));
+    }
+
+    // 11. Sorting
+    void testSortByNameAscending()
+    {
+        TestDir dir;
+        dir.createFile("charlie.txt");
+        dir.createFile("alpha.txt");
+        dir.createFile("bravo.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        model.sortByColumn("name", true);
+
+        QCOMPARE(model.rowCount(), 3);
+        QCOMPARE(model.fileName(0), QString("alpha.txt"));
+        QCOMPARE(model.fileName(1), QString("bravo.txt"));
+        QCOMPARE(model.fileName(2), QString("charlie.txt"));
+    }
+
+    void testSortByNameDescending()
+    {
+        TestDir dir;
+        dir.createFile("charlie.txt");
+        dir.createFile("alpha.txt");
+        dir.createFile("bravo.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        model.sortByColumn("name", false);
+
+        QCOMPARE(model.rowCount(), 3);
+        QCOMPARE(model.fileName(0), QString("charlie.txt"));
+        QCOMPARE(model.fileName(1), QString("bravo.txt"));
+        QCOMPARE(model.fileName(2), QString("alpha.txt"));
+    }
+
+    void testSortBySize()
+    {
+        TestDir dir;
+        dir.createFile("small.txt", QByteArray(10, 'a'));
+        dir.createFile("large.txt", QByteArray(1000, 'b'));
+        dir.createFile("medium.txt", QByteArray(100, 'c'));
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        model.sortByColumn("size", true);
+
+        QCOMPARE(model.rowCount(), 3);
+        // QDir::Size default order is largest first
+        QCOMPARE(model.fileName(0), QString("large.txt"));
+        QCOMPARE(model.fileName(1), QString("medium.txt"));
+        QCOMPARE(model.fileName(2), QString("small.txt"));
+    }
+
+    void testSortDirsFirst()
+    {
+        TestDir dir;
+        dir.createFile("zfile.txt");
+        dir.createDir("asubdir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        model.sortByColumn("name", true);
+
+        QCOMPARE(model.rowCount(), 2);
+        // dirs-first: subdir should come before file even though 'a' < 'z'
+        QVERIFY(model.isDir(0));
+        QVERIFY(!model.isDir(1));
+    }
+
+    void testSortUnknownColumnDefaultsToName()
+    {
+        TestDir dir;
+        dir.createFile("zeta.txt");
+        dir.createFile("alpha.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        model.sortByColumn("unknown_column", true);
+
+        QCOMPARE(model.rowCount(), 2);
+        QCOMPARE(model.fileName(0), QString("alpha.txt"));
+        QCOMPARE(model.fileName(1), QString("zeta.txt"));
+    }
+
+    // 12. refresh() detects externally added files
+    void testRefreshDetectsNewFile()
+    {
+        TestDir dir;
+        dir.createFile("existing.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        QCOMPARE(model.rowCount(), 1);
+
+        dir.createFile("newfile.txt");
+        model.refresh();
+
+        QCOMPARE(model.rowCount(), 2);
+    }
+
+    // 13. fileProperties()
+    void testFilePropertiesFile()
+    {
+        TestDir dir;
+        QString path = dir.createFile("test.txt", QByteArray(200, 'x'));
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QVariantMap props = model.fileProperties(path);
+
+        QCOMPARE(props["name"].toString(), QString("test.txt"));
+        QCOMPARE(props["size"].toLongLong(), qint64(200));
+        QVERIFY(props["sizeText"].toString().contains("200"));
+        QVERIFY(!props["mimeType"].toString().isEmpty());
+        QVERIFY(!props["permissions"].toString().isEmpty());
+        QCOMPARE(props["isDir"].toBool(), false);
+        QCOMPARE(props["isSymlink"].toBool(), false);
+    }
+
+    void testFilePropertiesDir()
+    {
+        TestDir dir;
+        QString subdir = dir.createDir("mydir");
+        dir.createFile("mydir/file1.txt");
+        dir.createFile("mydir/file2.txt");
+        dir.createDir("mydir/subsubdir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QVariantMap props = model.fileProperties(subdir);
+
+        QCOMPARE(props["isDir"].toBool(), true);
+        QCOMPARE(props["containedFiles"].toInt(), 2);
+        QCOMPARE(props["containedFolders"].toInt(), 1);
+        QCOMPARE(props["containedItems"].toInt(), 3);
+    }
+
+    void testFilePropertiesSymlink()
+    {
+        TestDir dir;
+        QString target = dir.createFile("real.txt", "content");
+        QString linkPath = dir.createSymlink(target, "link.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QVariantMap props = model.fileProperties(linkPath);
+
+        QCOMPARE(props["isSymlink"].toBool(), true);
+        QCOMPARE(props["symlinkTarget"].toString(), target);
+    }
+
+    void testFilePropertiesOwnership()
+    {
+        TestDir dir;
+        QString path = dir.createFile("owned.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QVariantMap props = model.fileProperties(path);
+
+        QVERIFY(props.contains("owner"));
+        QVERIFY(props.contains("group"));
+    }
+
+    void testFilePropertiesTimestamps()
+    {
+        TestDir dir;
+        QString path = dir.createFile("timed.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QVariantMap props = model.fileProperties(path);
+
+        QVERIFY(props.contains("created"));
+        QVERIFY(props.contains("modified"));
+        QVERIFY(props.contains("accessed"));
+        QVERIFY(!props["modified"].toString().isEmpty());
+    }
+
+    void testFilePropertiesDiskUsage()
+    {
+        TestDir dir;
+        QString path = dir.createFile("disk.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QVariantMap props = model.fileProperties(path);
+
+        // Disk info should be present (running on a real FS)
+        QVERIFY(props.contains("diskTotal"));
+        QVERIFY(props.contains("diskUsed"));
+        QVERIFY(props.contains("diskFree"));
+        QVERIFY(props.contains("diskUsedPercent"));
+    }
+
+    void testFilePropertiesAccessIndex()
+    {
+        TestDir dir;
+        QString path = dir.createFile("access.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QVariantMap props = model.fileProperties(path);
+
+        QVERIFY(props.contains("ownerAccess"));
+        QVERIFY(props.contains("groupAccess"));
+        QVERIFY(props.contains("otherAccess"));
+        // Owner typically has read+write = index 2
+        int ownerAccess = props["ownerAccess"].toInt();
+        QVERIFY(ownerAccess >= 1); // at least read
+    }
+
+    // 14. setFilePermissions()
+    void testSetFilePermissionsReadOnly()
+    {
+        TestDir dir;
+        QString path = dir.createFile("perms.txt", "data");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        bool ok = model.setFilePermissions(path, 1, 0, 0); // owner read-only
+        QVERIFY(ok);
+
+        QFileInfo info(path);
+        QVERIFY(info.isReadable());
+        QVERIFY(!info.isWritable());
+
+        // Restore write permission for cleanup
+        model.setFilePermissions(path, 2, 0, 0);
+    }
+
+    void testSetFilePermissionsFullAccess()
+    {
+        TestDir dir;
+        QString path = dir.createFile("fullperms.txt", "data");
+
+        // First make it read-only
+        model_setPermissionsHelper(path, 1, 0, 0);
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        bool ok = model.setFilePermissions(path, 2, 1, 1); // owner rw, group r, other r
+        QVERIFY(ok);
+
+        QFileInfo info(path);
+        QVERIFY(info.isReadable());
+        QVERIFY(info.isWritable());
+    }
+
+    // PDFs get a rendered first page in the grid and detailed views, which
+    // needs the model to report them separately from images and video.
+    void testPdfFilesReportAPdfPreview()
+    {
+        TestDir dir;
+        // %PDF header so QMimeDatabase content-sniffs it as application/pdf.
+        dir.createFile("doc.pdf", "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n");
+        dir.createFile("notes.txt", "plain");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        bool sawPdf = false, sawTxt = false;
+        for (int i = 0; i < model.rowCount(); ++i) {
+            const QModelIndex idx = model.index(i);
+            const QString name = model.data(idx, FileSystemModel::FileNameRole).toString();
+            const bool pdf = model.data(idx, FileSystemModel::HasPdfPreviewRole).toBool();
+            const bool img = model.data(idx, FileSystemModel::HasImagePreviewRole).toBool();
+            if (name == "doc.pdf") { sawPdf = true; QVERIFY(pdf); QVERIFY(!img); }
+            if (name == "notes.txt") { sawTxt = true; QVERIFY(!pdf); }
+        }
+        QVERIFY(sawPdf);
+        QVERIFY(sawTxt);
+    }
+
+    // 15. roleNames()
+    void testRoleNames()
+    {
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        auto roles = model.roleNames();
+
+        QCOMPARE(roles.count(), 23);
+        QCOMPARE(roles[FileSystemModel::HasPdfPreviewRole],    QByteArray("hasPdfPreview"));
+        QCOMPARE(roles[FileSystemModel::FileNameRole],         QByteArray("fileName"));
+        QCOMPARE(roles[FileSystemModel::FilePathRole],         QByteArray("filePath"));
+        QCOMPARE(roles[FileSystemModel::FileSizeRole],         QByteArray("fileSize"));
+        QCOMPARE(roles[FileSystemModel::FileSizeTextRole],     QByteArray("fileSizeText"));
+        QCOMPARE(roles[FileSystemModel::FileTypeRole],         QByteArray("fileType"));
+        QCOMPARE(roles[FileSystemModel::FileModifiedRole],     QByteArray("fileModified"));
+        QCOMPARE(roles[FileSystemModel::FileModifiedTextRole], QByteArray("fileModifiedText"));
+        QCOMPARE(roles[FileSystemModel::FilePermissionsRole],  QByteArray("filePermissions"));
+        QCOMPARE(roles[FileSystemModel::IsDirRole],            QByteArray("isDir"));
+        QCOMPARE(roles[FileSystemModel::IsSymlinkRole],        QByteArray("isSymlink"));
+        QCOMPARE(roles[FileSystemModel::FileIconNameRole],     QByteArray("fileIconName"));
+        QCOMPARE(roles[FileSystemModel::GitStatusRole],        QByteArray("gitStatus"));
+        QCOMPARE(roles[FileSystemModel::GitStatusIconRole],    QByteArray("gitStatusIcon"));
+        QCOMPARE(roles[FileSystemModel::HasImagePreviewRole],  QByteArray("hasImagePreview"));
+        QCOMPARE(roles[FileSystemModel::HasVideoPreviewRole],  QByteArray("hasVideoPreview"));
+        QCOMPARE(roles[FileSystemModel::FileOwnerRole],        QByteArray("fileOwner"));
+        QCOMPARE(roles[FileSystemModel::FileGroupRole],        QByteArray("fileGroup"));
+        QCOMPARE(roles[FileSystemModel::FileCreatedTextRole],  QByteArray("fileCreatedText"));
+        QCOMPARE(roles[FileSystemModel::FileAccessedTextRole], QByteArray("fileAccessedText"));
+        QCOMPARE(roles[FileSystemModel::FileExtensionRole],    QByteArray("fileExtension"));
+        QCOMPARE(roles[FileSystemModel::MimeTypeRole],         QByteArray("mimeType"));
+        QCOMPARE(roles[FileSystemModel::SymlinkTargetRole],    QByteArray("symlinkTarget"));
+    }
+
+    // 16. QAbstractItemModelTester
+    void testModelTesterEmpty()
+    {
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
+        Q_UNUSED(tester);
+        // Just constructing with no path should pass consistency checks
+    }
+
+    void testModelTesterWithData()
+    {
+        TestDir dir;
+        dir.createFile("a.txt");
+        dir.createFile("b.txt");
+        dir.createDir("subdir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
+
+        model.setRootPath(dir.path());
+        QCOMPARE(model.rowCount(), 3);
+    }
+
+    void testModelTesterAfterSort()
+    {
+        TestDir dir;
+        dir.createFile("z.txt");
+        dir.createFile("a.txt");
+        dir.createDir("mydir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
+
+        model.setRootPath(dir.path());
+        model.sortByColumn("name", true);
+        model.sortByColumn("name", false);
+    }
+
+    void testModelTesterShowHidden()
+    {
+        TestDir dir;
+        dir.createFile("visible.txt");
+        dir.createFile(".hidden");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QAbstractItemModelTester tester(&model, QAbstractItemModelTester::FailureReportingMode::QtTest);
+
+        model.setRootPath(dir.path());
+        model.setShowHidden(true);
+        model.setShowHidden(false);
+    }
+
+    // 17. Directory watcher detects new files
+    void testDirectoryWatcherDetectsNewFile()
+    {
+        TestDir dir;
+        dir.createFile("initial.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        QCOMPARE(model.rowCount(), 1);
+
+        dir.createFile("added.txt");
+
+        QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 2, 5000);
+    }
+
+    void testDirectoryWatcherDetectsRemovedFile()
+    {
+        TestDir dir;
+        dir.createFile("file1.txt");
+        dir.createFile("file2.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+        QCOMPARE(model.rowCount(), 2);
+
+        dir.removeFile("file1.txt");
+
+        QTRY_COMPARE_WITH_TIMEOUT(model.rowCount(), 1, 5000);
+    }
+
+    // 18. countsChanged signal emitted on setRootPath
+    void testCountsChangedOnSetRootPath()
+    {
+        TestDir dir;
+        dir.createFile("a.txt");
+        dir.createFile("b.txt");
+        dir.createDir("subdir");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        QSignalSpy spy(&model, &FileSystemModel::countsChanged);
+
+        model.setRootPath(dir.path());
+
+        QVERIFY(spy.count() >= 1);
+        QCOMPARE(model.fileCount(), 2);
+        QCOMPARE(model.folderCount(), 1);
+    }
+
+    void testCountsChangedOnShowHiddenToggle()
+    {
+        TestDir dir;
+        dir.createFile("visible.txt");
+        dir.createFile(".hidden");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        model.setRootPath(dir.path());
+
+        QSignalSpy spy(&model, &FileSystemModel::countsChanged);
+        model.setShowHidden(true);
+
+        QVERIFY(spy.count() >= 1);
+        QCOMPARE(model.fileCount(), 2);
+    }
+
+    void testPathSuggestionsReturnMatchingDirectories()
+    {
+        TestDir dir;
+        const QString alphaDir = dir.createDir("Alpha");
+        const QString alpineDir = dir.createDir("Alpine");
+        dir.createDir("Beta");
+        dir.createFile("Alpha.txt");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        const QVariantList suggestions = model.pathSuggestions(dir.path() + "/Al", 8);
+
+        QCOMPARE(suggestions.size(), 2);
+        QCOMPARE(suggestions.at(0).toMap().value("path").toString(), alphaDir);
+        QCOMPARE(suggestions.at(1).toMap().value("path").toString(), alpineDir);
+        QCOMPARE(suggestions.at(0).toMap().value("displayPath").toString(), alphaDir);
+    }
+
+    void testPathSuggestionsIncludeHiddenWhenRequested()
+    {
+        TestDir dir;
+        const QString hiddenDir = dir.createDir(".cache");
+        dir.createDir("config");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        const QVariantList suggestions = model.pathSuggestions(dir.path() + "/.", 8);
+
+        QCOMPARE(suggestions.size(), 1);
+        QCOMPARE(suggestions.at(0).toMap().value("path").toString(), hiddenDir);
+    }
+
+    void testPathSuggestionsRespectLimit()
+    {
+        TestDir dir;
+        dir.createDir("Alpha");
+        dir.createDir("Alpine");
+        dir.createDir("Alps");
+
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+        const QVariantList suggestions = model.pathSuggestions(dir.path() + "/Al", 2);
+
+        QCOMPARE(suggestions.size(), 2);
+    }
+
+    void testPathSuggestionsReturnAllChildrenWithoutLimit()
+    {
+        TestDir dir;
+        for (int i = 0; i < 12; ++i)
+            dir.createDir(QStringLiteral("Folder%1").arg(i, 2, 10, QLatin1Char('0')));
+
+        FileSystemModel model;
+        const QVariantList suggestions = model.pathSuggestions(dir.path() + "/", -1);
+
+        QCOMPARE(suggestions.size(), 12);
+    }
+
+    void testPathSuggestionsRankBestMatchesFirst()
+    {
+        TestDir dir;
+        const QString exact = dir.createDir("Alp");
+        const QString prefix = dir.createDir("Alpine");
+        const QString contained = dir.createDir("MyAlpFolder");
+        const QString fuzzy = dir.createDir("A-long-path");
+        dir.createDir("Beta");
+
+        FileSystemModel model;
+        const QVariantList suggestions = model.pathSuggestions(dir.path() + "/alp", 8);
+
+        QCOMPARE(suggestions.size(), 4);
+        QCOMPARE(suggestions.at(0).toMap().value("path").toString(), exact);
+        QCOMPARE(suggestions.at(1).toMap().value("path").toString(), prefix);
+        QCOMPARE(suggestions.at(2).toMap().value("path").toString(), contained);
+        QCOMPARE(suggestions.at(3).toMap().value("path").toString(), fuzzy);
+    }
+
+    void testStandardPathFollowsXdgUserDirs()
+    {
+        FileSystemModel model;
+
+        QCOMPARE(model.standardPath("pictures"),
+                 QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
+        QCOMPARE(model.standardPath("downloads"),
+                 QStandardPaths::writableLocation(QStandardPaths::DownloadLocation));
+
+        // Keys are case insensitive, and anything unknown falls back to home
+        QCOMPARE(model.standardPath("PICTURES"),
+                 QStandardPaths::writableLocation(QStandardPaths::PicturesLocation));
+        QCOMPARE(model.standardPath("not-a-folder"), QDir::homePath());
+    }
+
+    // The status bar shows "N free of M" for the directory on screen. A
+    // location with no filesystem of its own has to report -1 rather than the
+    // host's disk, which would be a number about something else entirely.
+    void testDiskSpaceReportsTheListedDirectoryOrNothing()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        FileSystemModel model;
+        model.setSynchronousReload(true);
+
+        // No root yet.
+        QCOMPARE(model.diskFree(), -1);
+        QCOMPARE(model.diskTotal(), -1);
+
+        model.setRootPath(dir.path());
+        const qint64 total = model.diskTotal();
+        const qint64 free = model.diskFree();
+        QVERIFY(total > 0);
+        QVERIFY(free >= 0);
+        QVERIFY(free <= total);
+        QCOMPARE(total, QStorageInfo(dir.path()).bytesTotal());
+
+        // Trash and remote roots borrow the host's disk; both must stay quiet.
+        model.setRootPath(QStringLiteral("trash:///"));
+        QCOMPARE(model.diskFree(), -1);
+        QCOMPARE(model.diskTotal(), -1);
+
+        model.setRootPath(QStringLiteral("sftp://example.com/home/user"));
+        QCOMPARE(model.diskFree(), -1);
+        QCOMPARE(model.diskTotal(), -1);
+    }
+
+private:
+    // Helper to set permissions without a FileSystemModel instance
+    void model_setPermissionsHelper(const QString &path, int ownerAccess, int groupAccess, int otherAccess)
+    {
+        FileSystemModel m;
+        m.setFilePermissions(path, ownerAccess, groupAccess, otherAccess);
+    }
+};
+
+QTEST_MAIN(TestFileSystemModel)
+#include "tst_filesystemmodel.moc"

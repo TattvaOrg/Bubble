@@ -1,9 +1,0 @@
-[package]
-name = "bubble-vault-destroy"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-bubble-core = { path = "../bubble-core" }
-libc = "0.2.189"
-dirs = "6.0.0"
