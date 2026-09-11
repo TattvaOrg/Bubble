@@ -1,0 +1,44 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/bubble-core",
+    "crates/bubble-vault-helper",
+    "crates/bubble-vault-destroy",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Soyeb Pervez Jim"]
+repository = "https://github.com/TattvaOrg/Bubble"
+
+[workspace.dependencies]
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+
+# Crypto
+aes-gcm = "0.10"
+argon2 = "0.5"
+rand = "0.8"
+
+# Database
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# System
+nix = { version = "0.29", features = ["fs", "signal", "process", "user"] }
+xattr = "1.3"
+walkdir = "2.5"
+glob = "0.3"
+regex = "1.10"
+chrono = "0.4"
+dirs = "5.0"
+url = "2.5"
+
+# Utilities
+thiserror = "1.0"
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"

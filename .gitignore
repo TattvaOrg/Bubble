@@ -12,3 +12,4 @@ docs/*
 !docs/screenshots/
 CMakeFiles/
 CMakeCache.txt
+target/
