@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "crates/bubble-core",
+    "crates/bubble-vault-helper",
+    "crates/bubble-vault-destroy",
+    "crates/bubble-app",
+]
+resolver = "2"

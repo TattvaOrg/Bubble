@@ -23,7 +23,7 @@ else
 fi
 
 # Handle execution via curl / outside git repo
-if [[ ! -d "$SCRIPT_DIR/.git" || ! -f "$SCRIPT_DIR/CMakeLists.txt" ]]; then
+if [[ ! -d "$SCRIPT_DIR/.git" || ! -f "$SCRIPT_DIR/Cargo.toml" ]]; then
     CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bubble-source"
     echo "==> Bubble updater invoked outside source repo."
     if [[ -d "$CACHE_DIR/.git" ]]; then
