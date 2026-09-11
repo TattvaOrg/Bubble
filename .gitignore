@@ -1,6 +1,7 @@
 build/
 build-*/
 rust/target/
+target/
 result
 .cache/
 .superpowers/

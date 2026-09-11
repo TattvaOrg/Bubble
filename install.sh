@@ -20,7 +20,7 @@ else
     SCRIPT_DIR="$(pwd)"
 fi
 
-if [[ ! -f "$SCRIPT_DIR/CMakeLists.txt" || ! -d "$SCRIPT_DIR/src" ]]; then
+if [[ ! -f "$SCRIPT_DIR/Cargo.toml" || ! -d "$SCRIPT_DIR/crates" ]]; then
     TMP_CLONE_DIR="$(mktemp -d /tmp/bubble-install-XXXXXX)"
     echo "==> Fetching Bubble source repository to $TMP_CLONE_DIR..."
     git clone --depth 1 --recursive https://github.com/TattvaOrg/Bubble.git "$TMP_CLONE_DIR"
@@ -372,26 +372,40 @@ fi
 # ==============================================================================
 # Configure & Build
 # ==============================================================================
-if [[ $FORCE_REBUILD -eq 1 && -d "$BUILD_DIR" ]]; then
-    echo "==> Cleaning existing build directory..."
-    rm -rf "$BUILD_DIR"
+if [[ $FORCE_REBUILD -eq 1 && -d "$SCRIPT_DIR/target" ]]; then
+    echo "==> Cleaning existing Cargo target directory..."
+    cargo clean
 fi
 
-echo "==> Configuring CMake..."
-cmake -B "$BUILD_DIR" -S "$SCRIPT_DIR" -G Ninja \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-    -DCMAKE_INSTALL_PREFIX="$PREFIX" \
-    -DBUILD_TESTS=OFF \
-    -DBUBBLE_DATA_DIR="$PREFIX/share/bubble"
-
-echo "==> Building Bubble..."
-cmake --build "$BUILD_DIR" --parallel
+echo "==> Building Bubble with Cargo..."
+if [[ "$BUILD_TYPE" == "Debug" ]]; then
+    cargo build
+    TARGET_SUBDIR="debug"
+else
+    cargo build --release
+    TARGET_SUBDIR="release"
+fi
 
 echo "==> Installing Bubble to '$PREFIX'..."
-cmake --install "$BUILD_DIR" --prefix "$PREFIX"
+mkdir -p "$PREFIX/bin"
+mkdir -p "$PREFIX/share/bubble"
+mkdir -p "$PREFIX/share/applications"
+mkdir -p "$PREFIX/share/icons/hicolor/scalable/apps"
+mkdir -p "$PREFIX/share/metainfo"
+mkdir -p "$PREFIX/share/libalpm/hooks"
+mkdir -p "$PREFIX/share/polkit-1/actions"
 
-# Additional integrations
-mkdir -p "$PREFIX/bin" "$PREFIX/share/applications"
+install -m 755 "$SCRIPT_DIR/target/$TARGET_SUBDIR/bubble" "$PREFIX/bin/bubble"
+install -m 755 "$SCRIPT_DIR/target/$TARGET_SUBDIR/bubble-vault-helper" "$PREFIX/bin/bubble-vault-helper"
+install -m 755 "$SCRIPT_DIR/target/$TARGET_SUBDIR/bubble-vault-destroy" "$PREFIX/bin/bubble-vault-destroy"
+
+cp -r "$SCRIPT_DIR/src/qml" "$PREFIX/share/bubble/" 2>/dev/null || true
+cp -r "$SCRIPT_DIR/themes" "$PREFIX/share/bubble/" 2>/dev/null || true
+install -m 644 "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.desktop" "$PREFIX/share/applications/"
+install -m 644 "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.svg" "$PREFIX/share/icons/hicolor/scalable/apps/"
+install -m 644 "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.metainfo.xml" "$PREFIX/share/metainfo/"
+install -m 644 "$SCRIPT_DIR/dist/bubble-cleanup.hook" "$PREFIX/share/libalpm/hooks/" 2>/dev/null || true
+install -m 644 "$SCRIPT_DIR/dist/org.bubble.vault.policy" "$PREFIX/share/polkit-1/actions/" 2>/dev/null || true
 
 # Backward-compatibility symlink: hyprfm -> bubble
 ln -sf bubble "$PREFIX/bin/hyprfm"
