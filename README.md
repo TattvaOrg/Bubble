@@ -126,9 +126,9 @@ Bubble is a Qt6/QML file manager designed to feel native on Hyprland: lightweigh
 
 ## Installation
 
-### One-Liner Install
+### One-Liner Install (Recommended)
 
-Run the automated installer in your terminal to build and install Bubble to `~/.local` (no root required):
+Install the latest precompiled release binary directly to `~/.local` (no root required, no compilation needed):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | bash
@@ -136,65 +136,41 @@ curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | b
 
 ### Build from Source
 
-Clone the repository and run the automated installer:
+To compile Bubble from source using Cargo and CMake:
 
 ```bash
 git clone --recursive https://github.com/TattvaOrg/Bubble.git
 cd Bubble
-./install.sh
+./install.sh --from-source
 ```
 
 **Installer Options:**
-- `-y` : Automatically install missing dependencies with your package manager
+- `--update` : Check for and apply the latest release update
+- `--uninstall` : Cleanly uninstall Bubble and securely shred vault data
 - `--system` : Install system-wide to `/usr/local` (requires `sudo`)
 - `--prefix <dir>` : Install to a custom directory
-- `--no-deps` : Skip dependency checking
-- `--uninstall` : Cleanly uninstall Bubble and shred locked files
-
-### Arch Linux / CachyOS
-
-You can build and install a native `pacman` package directly:
-
-```bash
-git clone --recursive https://github.com/TattvaOrg/Bubble.git
-cd Bubble
-makepkg -si
-```
+- `--from-source`, `-s` : Force compiling from source using Cargo and CMake
+- `-y`, `--yes` : Non-interactive mode (automatically answer yes)
 
 ---
 
-## Updating
+## Updating & Uninstalling
 
-### One-Liner Update
+### Update
 
-Update an existing installation to the latest version directly from your terminal:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/update.sh | bash
-```
-
-### Local Update
-
-If you cloned the repository locally, pull updates, sync submodules, and rebuild:
+Update an existing installation to the latest release binary with a single command:
 
 ```bash
-cd Bubble
-./update.sh
+curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | bash -s -- --update
 ```
 
-**Updater Options:**
-- Check for updates without applying:
-  ```bash
-  ./update.sh --check
-  ```
-- Force a clean rebuild and reinstall:
-  ```bash
-  ./update.sh --rebuild
-  ```
-- Update a system-wide installation (`/usr/local`):
-  ```bash
-  sudo ./update.sh --system
-  ```
+### Uninstall
+
+Cleanly remove Bubble and optionally shred locked vault files:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/TattvaOrg/Bubble/main/install.sh | bash -s -- --uninstall
+```
 
 ---
 
@@ -429,11 +405,14 @@ dark so the initial theme matches rather than always starting dark.
 
 ## Architecture
 
-Bubble is a three-layer Qt6 application:
+Bubble combines a fast QML UI with native Rust services:
 
-- **QML frontend** (`src/qml/`): all rendering. `Main.qml` wires tab state, selection, and shortcuts. Views (`FileGridView`, `FileDetailedView`, `FileMillerView`) are switched by `FileViewContainer`. The [Quill](https://github.com/soyeb-jim285/quill) component library provides themed Buttons, TextFields, Cards, etc.
-- **C++ backend** (`src/models/`, `src/services/`, `src/providers/`): `QAbstractListModel` subclasses for files, tabs, bookmarks, devices. Async services for clipboard, file operations, search, disk usage, previews. Exposed to QML via `setContextProperty`.
-- **System layer**: GIO (`GioTransferWorker`) for transfers, UDisks2 over DBus for devices, `wl-copy` for clipboard.
+- **QML frontend** (`src/qml/`): all rendering. `Main.qml` wires tab state, selection, and shortcuts. Views (`FileGridView`, `FileDetailedView`, `FileMillerView`) are switched by `FileViewContainer`. The [Quill](https://github.com/soyeb-jim285/quill) component library provides themed Buttons, TextFields, Cards, and layout primitives.
+- **Rust backend & tools** (`crates/`):
+  - `bubble-core`: pure Rust core logic powering AES-256-GCM + Argon2id encryption, SQLite vault database with `rusqlite`, TOML config and theme parsers, XDG trash spec reader, fast Git status parser, recursive disk usage with inode deduplication, and fd/walkdir search engine.
+  - `bubble-vault-helper`: lightweight setuid helper managing kernel immutable attributes (`FS_IMMUTABLE_FL`) on locked items to prevent root or sudo tampering.
+  - `bubble-vault-destroy`: standalone vault destruction and process-monitoring auto-lock utility.
+- **System layer**: GIO for filesystem transfers, UDisks2 over DBus for storage devices, `wl-copy` for Wayland clipboard.
 
 ---
 
@@ -441,11 +420,10 @@ Bubble is a three-layer Qt6 application:
 
 Issues and PRs welcome! A few notes:
 
-- Tests are off in the build recipe above; configure with `-DBUILD_TESTS=ON` and run `ctest --test-dir build`
-- Pull requests are built and tested automatically by the `Build` workflow
-- Match the existing code style (4-space indent for QML and C++)
+- Run Rust unit tests with `cargo test --workspace`
+- Match the existing code style (4-space indent for QML, standard `rustfmt` for Rust)
 - The project uses Git submodules, so run `git submodule update --init --recursive` after pulling
-- AppImage builds are produced automatically on `v*` tags by the GitHub Actions workflow
+- Precompiled binary tarballs and AppImages are produced automatically on `v*` release tags by GitHub Actions
 
 ---
 
