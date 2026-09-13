@@ -9,10 +9,10 @@
 #
 # What it does, in order:
 #   1. Bumps every in-tree version reference:
-#        - CMakeLists.txt   project(bubble VERSION X.Y.Z ...)
+#        - crates/bubble-app/Cargo.toml   version = "X.Y.Z"
 #        - io.github.soyeb_jim285.Bubble.yml     bubble source `tag: vX.Y.Z`
 #        - dist/*.metainfo.xml   screenshot URLs + new <release> entry
-#   2. Runs a quick cmake build as a smoke test (if build/ exists).
+#   2. Runs a quick Cargo build as a smoke test.
 #   3. Creates a "chore: release vX.Y.Z" commit on the current branch.
 #   4. Creates an annotated git tag vX.Y.Z on that commit.
 #   5. Stops BEFORE pushing — prints the exact push commands so you can
@@ -40,11 +40,11 @@ TAG="v$VERSION"
 REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
-CMAKE_FILE="CMakeLists.txt"
+CARGO_FILE="crates/bubble-app/Cargo.toml"
 FLATPAK_FILE="io.github.soyeb_jim285.Bubble.yml"
 META_FILE="dist/io.github.soyeb_jim285.Bubble.metainfo.xml"
 
-for f in "$CMAKE_FILE" "$FLATPAK_FILE" "$META_FILE"; do
+for f in "$CARGO_FILE" "$FLATPAK_FILE" "$META_FILE"; do
     [ -f "$f" ] || { echo "release.sh: missing $f" >&2; exit 1; }
 done
 
@@ -66,18 +66,19 @@ fi
 
 echo "==> Cutting release $VERSION"
 
-# 1. CMakeLists.txt ---------------------------------------------------------
-python3 - "$CMAKE_FILE" "$VERSION" <<'PY'
+# 1. Cargo.toml -------------------------------------------------------------
+python3 - "$CARGO_FILE" "$VERSION" <<'PY'
 import re, sys, pathlib
 path, version = pathlib.Path(sys.argv[1]), sys.argv[2]
 text = path.read_text()
 new, n = re.subn(
-    r'(project\(bubble\s+VERSION\s+)\d+\.\d+\.\d+',
-    rf'\g<1>{version}',
+    r'(version\s*=\s*")\d+\.\d+\.\d+(")',
+    rf'\g<1>{version}\g<2>',
     text,
+    count=1
 )
 if n != 1:
-    raise SystemExit(f"release.sh: expected 1 project(bubble VERSION ...) in {path}, found {n}")
+    raise SystemExit(f"release.sh: expected 1 version = ... in {path}, found {n}")
 path.write_text(new)
 PY
 
@@ -135,14 +136,12 @@ if f'<release version="{version}"' not in text:
 path.write_text(text)
 PY
 
-# 4. Smoke build (only if a build tree already exists) ---------------------
-if [ -d build ]; then
-    echo "==> Smoke build (reusing existing build/)"
-    cmake --build build --target bubble >/dev/null
-fi
+# 4. Smoke build -----------------------------------------------------------
+echo "==> Smoke build via Cargo"
+cargo build --release --quiet
 
 # 5. Commit + tag ----------------------------------------------------------
-git add "$CMAKE_FILE" "$FLATPAK_FILE" "$META_FILE"
+git add "$CARGO_FILE" "$FLATPAK_FILE" "$META_FILE"
 git commit -m "chore: release $TAG"
 if [ -n "$NOTES_FILE" ]; then
     # verbatim: Markdown headings start with "#", which git would otherwise strip as comments

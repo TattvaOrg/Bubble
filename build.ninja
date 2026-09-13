@@ -1,0 +1,31 @@
+# build.ninja - Ninja driver for Bubble file manager (Rust & Cargo)
+
+ninja_required_version = 1.8
+
+rule cargo_release
+  command = cargo build --release
+  description = Cargo build (release)
+  pool = console
+
+rule cargo_debug
+  command = cargo build
+  description = Cargo build (debug)
+  pool = console
+
+rule cargo_test
+  command = cargo test --workspace
+  description = Cargo test (workspace)
+  pool = console
+
+rule cargo_clean
+  command = cargo clean
+  description = Cargo clean
+  pool = console
+
+build release: cargo_release
+build debug: cargo_debug
+build test: cargo_test
+build clean: cargo_clean
+build all: cargo_release
+
+default release

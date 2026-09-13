@@ -34,8 +34,7 @@ download_file() {
     exit 1
 }
 
-require_tool cmake
-require_tool make
+require_tool cargo
 
 QMAKE_BIN="$(command -v qmake6 || command -v qmake || true)"
 if [[ -z "$QMAKE_BIN" ]]; then
@@ -71,24 +70,22 @@ VERSION_LABEL="$(git -C "$ROOT_DIR" describe --tags --always --dirty 2>/dev/null
 VERSION_LABEL="$(printf '%s' "$VERSION_LABEL" | tr -cs 'A-Za-z0-9._-' '-')"
 APPIMAGE_NAME="${APPIMAGE_NAME:-Bubble-${VERSION_LABEL}-x86_64.AppImage}"
 
-GENERATOR_ARGS=()
-if command -v ninja >/dev/null 2>&1; then
-    GENERATOR_ARGS=(-G Ninja)
-fi
-
 rm -rf "$BUILD_DIR" "$APPDIR"
 rm -f "$ROOT_DIR/$APPIMAGE_NAME"
 
-cmake -S "$ROOT_DIR" -B "$BUILD_DIR" "${GENERATOR_ARGS[@]}" \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX=/usr \
-    -DBUBBLE_DATA_DIR=/usr/share/bubble \
-    -DBUBBLE_ENABLE_QML_CACHEGEN=ON \
-    -DBUILD_TESTS=OFF
+echo "==> Building Bubble release binary with Cargo..."
+cargo build --release
 
-cmake --build "$BUILD_DIR" --parallel
-
-DESTDIR="$APPDIR" cmake --install "$BUILD_DIR"
+mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/bubble" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/scalable/apps" "$APPDIR/usr/share/metainfo"
+cp "$ROOT_DIR/target/release/bubble" "$APPDIR/usr/bin/"
+cp "$ROOT_DIR/target/release/bubble-vault-helper" "$APPDIR/usr/bin/"
+cp "$ROOT_DIR/target/release/bubble-vault-destroy" "$APPDIR/usr/bin/"
+ln -sf bubble "$APPDIR/usr/bin/hyprfm"
+cp -r "$ROOT_DIR/src/qml" "$APPDIR/usr/share/bubble/"
+cp -r "$ROOT_DIR/themes" "$APPDIR/usr/share/bubble/"
+cp "$ROOT_DIR/dist/io.github.soyeb_jim285.Bubble.desktop" "$APPDIR/usr/share/applications/"
+cp "$ROOT_DIR/dist/io.github.soyeb_jim285.Bubble.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps/"
+cp "$ROOT_DIR/dist/io.github.soyeb_jim285.Bubble.metainfo.xml" "$APPDIR/usr/share/metainfo/"
 
 export QMAKE="$QMAKE_BIN"
 export QML_SOURCES_PATHS="$ROOT_DIR/src/qml"

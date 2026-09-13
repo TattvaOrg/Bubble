@@ -15,4 +15,5 @@ docs/*
 !docs/screenshots/
 CMakeFiles/
 CMakeCache.txt
+.ninja_log
 

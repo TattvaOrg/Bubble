@@ -203,7 +203,7 @@ detect_missing_dependencies() {
     local missing=()
 
     # Core build tools
-    for tool in cmake git; do
+    for tool in git; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             missing+=("$tool")
         fi
@@ -217,11 +217,6 @@ detect_missing_dependencies() {
     # Pkg-config
     if ! command -v pkg-config >/dev/null 2>&1 && ! command -v pkgconf >/dev/null 2>&1; then
         missing+=("pkg-config")
-    fi
-
-    # Compiler
-    if ! command -v g++ >/dev/null 2>&1 && ! command -v clang++ >/dev/null 2>&1; then
-        missing+=("c++-compiler")
     fi
 
     # Rust toolchain
@@ -255,10 +250,8 @@ detect_missing_dependencies() {
     fi
 
     # Qt6 Core / Quick
-    if ! cmake --find-package -DNAME=Qt6Core -DCOMPILER_ID=GNU -DLANGUAGE=CXX -DMODE=EXIST >/dev/null 2>&1 \
-       && ! cmake --find-package -DNAME=Qt6Core -DCOMPILER_ID=Clang -DLANGUAGE=CXX -DMODE=EXIST >/dev/null 2>&1 \
-       && ! command -v qmake6 >/dev/null 2>&1; then
-        if [[ ! -d "/usr/lib/cmake/Qt6" && ! -d "/usr/lib64/cmake/Qt6" && ! -d "/usr/local/lib/cmake/Qt6" ]]; then
+    if ! command -v qmake6 >/dev/null 2>&1 && ! command -v qmake >/dev/null 2>&1; then
+        if [[ ! -d "/usr/include/qt6" && ! -d "/usr/include/x86_64-linux-gnu/qt6" && ! -d "/usr/lib/qt6" ]]; then
             missing+=("qt6")
         fi
     fi
@@ -281,19 +274,19 @@ install_distro_dependencies() {
 
     if [[ "$OS_ID" =~ (arch|cachyos|manjaro|endeavouros|artix|garuda) || "$OS_LIKE" =~ arch ]]; then
         install_cmd="pacman -S --needed"
-        pkg_list="cmake ninja git pkgconf gcc rust sqlite qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils openssl argon2 psmisc"
+        pkg_list="ninja git pkgconf rust sqlite qt6-base qt6-declarative qt6-svg qt6-wayland glib2 xdg-utils openssl argon2 psmisc"
     elif [[ "$OS_ID" =~ (debian|ubuntu|linuxmint|pop|elementary|zorin|kali) || "$OS_LIKE" =~ (debian|ubuntu) ]]; then
         install_cmd="apt-get install -y"
-        pkg_list="cmake ninja-build git pkg-config g++ rustc cargo libsqlite3-dev qt6-base-dev qt6-declarative-dev libqt6svg6-dev qt6-wayland libglib2.0-dev xdg-utils libssl-dev libargon2-dev libqt6sql6-sqlite psmisc"
+        pkg_list="ninja-build git pkg-config rustc cargo libsqlite3-dev qt6-base-dev qt6-declarative-dev libqt6svg6-dev qt6-wayland libglib2.0-dev xdg-utils libssl-dev libargon2-dev libqt6sql6-sqlite psmisc"
     elif [[ "$OS_ID" =~ (fedora|rhel|centos|rocky|alma) || "$OS_LIKE" =~ (fedora|rhel) ]]; then
         install_cmd="dnf install -y"
-        pkg_list="cmake ninja-build git pkgconf-pkg-config gcc-c++ rust cargo sqlite-devel qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtwayland glib2-devel xdg-utils openssl-devel libargon2-devel qt6-qtbase-sqlite psmisc"
+        pkg_list="ninja-build git pkgconf-pkg-config rust cargo sqlite-devel qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtsvg-devel qt6-qtwayland glib2-devel xdg-utils openssl-devel libargon2-devel qt6-qtbase-sqlite psmisc"
     elif [[ "$OS_ID" =~ opensuse || "$OS_LIKE" =~ (suse|opensuse) ]]; then
         install_cmd="zypper install -y"
-        pkg_list="cmake ninja git pkgconf gcc-c++ rust cargo sqlite3-devel qt6-base-devel qt6-declarative-devel libqt6svg6-devel libQt6WaylandClient6 glib2-devel xdg-utils libopenssl-devel libargon2-devel psmisc"
+        pkg_list="ninja git pkgconf rust cargo sqlite3-devel qt6-base-devel qt6-declarative-devel libqt6svg6-devel libQt6WaylandClient6 glib2-devel xdg-utils libopenssl-devel libargon2-devel psmisc"
     elif [[ "$OS_ID" == "void" ]]; then
         install_cmd="xbps-install -S -y"
-        pkg_list="cmake ninja git pkg-config gcc rust cargo sqlite-devel qt6-base-devel qt6-declarative-devel qt6-svg-devel qt6-wayland-devel glib-devel openssl-devel libargon2-devel psmisc"
+        pkg_list="ninja git pkg-config rust cargo sqlite-devel qt6-base-devel qt6-declarative-devel qt6-svg-devel qt6-wayland-devel glib-devel openssl-devel libargon2-devel psmisc"
     else
         echo "Warning: Could not automatically identify your Linux distribution ($OS_ID)." >&2
         return 1
@@ -377,8 +370,16 @@ if [[ $FORCE_REBUILD -eq 1 && -d "$SCRIPT_DIR/target" ]]; then
     cargo clean
 fi
 
-echo "==> Building Bubble with Cargo..."
-if [[ "$BUILD_TYPE" == "Debug" ]]; then
+echo "==> Building Bubble with Cargo / Ninja..."
+if command -v ninja >/dev/null 2>&1 && [[ -f "$SCRIPT_DIR/build.ninja" ]]; then
+    if [[ "$BUILD_TYPE" == "Debug" ]]; then
+        ninja debug
+        TARGET_SUBDIR="debug"
+    else
+        ninja release
+        TARGET_SUBDIR="release"
+    fi
+elif [[ "$BUILD_TYPE" == "Debug" ]]; then
     cargo build
     TARGET_SUBDIR="debug"
 else

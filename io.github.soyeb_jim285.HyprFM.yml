@@ -183,25 +183,29 @@ modules:
       - /bin/pdftotext
       - /bin/pdfunite
 
-  - name: hyprfm
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DCMAKE_BUILD_TYPE=Release
-      - -DCMAKE_INSTALL_PREFIX=/app
-      - -DHYPRFM_DATA_DIR=/app/share/hyprfm
-      - -DBUILD_TESTS=OFF
-      - -DHYPRFM_ENABLE_PCH=OFF
-      - -DHYPRFM_ENABLE_UNITY_BUILD=OFF
+  - name: bubble
+    buildsystem: simple
+    build-commands:
+      - cargo build --release
+      - install -Dm755 target/release/bubble /app/bin/bubble
+      - install -Dm755 target/release/bubble-vault-helper /app/bin/bubble-vault-helper
+      - install -Dm755 target/release/bubble-vault-destroy /app/bin/bubble-vault-destroy
+      - ln -sf bubble /app/bin/hyprfm
+      - mkdir -p /app/share/bubble
+      - cp -r src/qml /app/share/bubble/
+      - cp -r themes /app/share/bubble/
+      - install -Dm644 dist/io.github.soyeb_jim285.Bubble.desktop /app/share/applications/io.github.soyeb_jim285.Bubble.desktop
+      - install -Dm644 dist/io.github.soyeb_jim285.Bubble.svg /app/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg
+      - install -Dm644 dist/io.github.soyeb_jim285.Bubble.metainfo.xml /app/share/metainfo/io.github.soyeb_jim285.Bubble.metainfo.xml
     post-install:
       # Required by Flathub: every app must install its license file to
       # $FLATPAK_DEST/share/licenses/$FLATPAK_ID.
-      - install -Dm644 LICENSE /app/share/licenses/io.github.soyeb_jim285.HyprFM/LICENSE
+      - install -Dm644 LICENSE /app/share/licenses/io.github.soyeb_jim285.Bubble/LICENSE
     sources:
       # ── FLATHUB SUBMISSION ──
       - type: git
         url: https://github.com/soyeb-jim285/hyprfm.git
         tag: v0.6.1
-
       # ── LOCAL ITERATION ──
       # For testing uncommitted changes locally, comment out the git
       # source above and uncomment the dir source below. Remember to

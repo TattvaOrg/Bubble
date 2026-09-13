@@ -41,14 +41,7 @@
       forEachSystem = nixpkgs.lib.genAttrs systems;
       pkgsFor = system: import nixpkgs { inherit system; };
 
-      # Single source of truth for the version lives in CMakeLists.txt
-      # (`project(bubble VERSION x.y.z ...)`) so it never has to be bumped
-      # in two places.
-      version = builtins.head (
-        builtins.match ".*project\\(bubble VERSION ([0-9]+\\.[0-9]+\\.[0-9]+).*" (
-          builtins.readFile ./CMakeLists.txt
-        )
-      );
+      version = "0.6.1";
 
       # Only the client-side GIO module is usable from an application closure:
       # gvfsd and its backends are D-Bus-activated per-session services, so a
@@ -87,7 +80,8 @@
           src = self;
 
           nativeBuildInputs = with pkgs; [
-            cmake
+            cargo
+            rustc
             ninja
             pkg-config
             kdePackages.wrapQtAppsHook
@@ -98,22 +92,36 @@
             kdePackages.qtdeclarative
             kdePackages.qtsvg
             kdePackages.qtwayland
-            kdePackages.kwindowsystem
             glib
+            openssl
+            argon2
+            sqlite
           ];
 
           # Submodules aren't fetched for a plain flake source; drop the
-          # pinned inputs in where CMake/QML expect them instead.
+          # pinned inputs in where QML expects them instead.
           postPatch = ''
             rm -rf src/qml/icons src/qml/Quill
             cp -r --no-preserve=mode,ownership ${quill-icons} src/qml/icons
             cp -r --no-preserve=mode,ownership ${quill} src/qml/Quill
           '';
 
-          cmakeFlags = [
-            "-DBUILD_TESTS=OFF"
-            "-DBUBBLE_DATA_DIR=${placeholder "out"}/share/bubble"
-          ];
+          buildPhase = ''
+            cargo build --release
+          '';
+
+          installPhase = ''
+            mkdir -p $out/bin $out/share/bubble $out/share/applications $out/share/icons/hicolor/scalable/apps $out/share/metainfo
+            cp target/release/bubble $out/bin/
+            cp target/release/bubble-vault-helper $out/bin/
+            cp target/release/bubble-vault-destroy $out/bin/
+            ln -s bubble $out/bin/hyprfm
+            cp -r src/qml $out/share/bubble/
+            cp -r themes $out/share/bubble/
+            cp dist/io.github.soyeb_jim285.Bubble.desktop $out/share/applications/
+            cp dist/io.github.soyeb_jim285.Bubble.svg $out/share/icons/hicolor/scalable/apps/
+            cp dist/io.github.soyeb_jim285.Bubble.metainfo.xml $out/share/metainfo/
+          '';
 
           qtWrapperArgs = [
             "--prefix"

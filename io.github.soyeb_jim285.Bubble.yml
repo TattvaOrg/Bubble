@@ -184,14 +184,19 @@ modules:
       - /bin/pdfunite
 
   - name: bubble
-    buildsystem: cmake-ninja
-    config-opts:
-      - -DCMAKE_BUILD_TYPE=Release
-      - -DCMAKE_INSTALL_PREFIX=/app
-      - -DBUBBLE_DATA_DIR=/app/share/bubble
-      - -DBUILD_TESTS=OFF
-      - -DBUBBLE_ENABLE_PCH=OFF
-      - -DBUBBLE_ENABLE_UNITY_BUILD=OFF
+    buildsystem: simple
+    build-commands:
+      - cargo build --release
+      - install -Dm755 target/release/bubble /app/bin/bubble
+      - install -Dm755 target/release/bubble-vault-helper /app/bin/bubble-vault-helper
+      - install -Dm755 target/release/bubble-vault-destroy /app/bin/bubble-vault-destroy
+      - ln -sf bubble /app/bin/hyprfm
+      - mkdir -p /app/share/bubble
+      - cp -r src/qml /app/share/bubble/
+      - cp -r themes /app/share/bubble/
+      - install -Dm644 dist/io.github.soyeb_jim285.Bubble.desktop /app/share/applications/io.github.soyeb_jim285.Bubble.desktop
+      - install -Dm644 dist/io.github.soyeb_jim285.Bubble.svg /app/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg
+      - install -Dm644 dist/io.github.soyeb_jim285.Bubble.metainfo.xml /app/share/metainfo/io.github.soyeb_jim285.Bubble.metainfo.xml
     post-install:
       # Required by Flathub: every app must install its license file to
       # $FLATPAK_DEST/share/licenses/$FLATPAK_ID.
