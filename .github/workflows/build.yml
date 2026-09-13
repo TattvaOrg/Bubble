@@ -4,94 +4,43 @@ on:
   push:
     branches:
       - main
+      - rust-rewrite
     tags:
       - 'v*'
-  # Build and test pull requests too. Everything that publishes -- AppImage,
-  # Flatpak, the release job -- is gated on refs/tags/v, so a PR run only
-  # configures, builds and runs the test suite. Without this a PR could add a
-  # runtime dependency the package never ships and no amount of review would
-  # catch it; that is exactly how the nix flake shipped with archive handling
-  # and icons broken.
   pull_request:
     branches:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
+    name: Build & Test
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Verify version consistency (tag pushes only)
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-        run: |
-          TAG="$TAG_NAME"
-          VERSION="${TAG#v}"
-          echo "Tag push: $TAG (version $VERSION)"
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
 
-          fail=0
-          check() {
-            local label="$1" expected="$2" found="$3"
-            if [ "$expected" != "$found" ]; then
-              echo "::error::$label mismatch: expected '$expected', found '$found'"
-              fail=1
-            else
-              echo "OK   $label: $found"
-            fi
-          }
-
-          cmake_ver=$(grep -E '^project\(bubble VERSION' CMakeLists.txt \
-                       | sed -E 's/^project\(bubble VERSION ([0-9.]+).*/\1/')
-          check "CMakeLists.txt" "$VERSION" "$cmake_ver"
-
-          flatpak_tag=$(python3 -c '
-          import re
-          t = open("io.github.soyeb_jim285.Bubble.yml").read()
-          m = re.search(r"url:\s*https://github\.com/soyeb-jim285/bubble\.git\s*\n(?:[^\n]*\n)*?\s*tag:\s*(v\d+\.\d+\.\d+)", t)
-          print(m.group(1) if m else "")
-          ')
-          check "flatpak manifest bubble tag" "$TAG" "$flatpak_tag"
-
-          if grep -q "<release version=\"$VERSION\"" dist/io.github.soyeb_jim285.Bubble.metainfo.xml; then
-            echo "OK   metainfo.xml <release> entry present"
-          else
-            echo "::error::metainfo.xml is missing a <release version=\"$VERSION\"> entry"
-            fail=1
-          fi
-
-          if [ "$fail" -ne 0 ]; then
-            echo
-            echo "One or more version references do not match the pushed tag."
-            echo "Run scripts/release.sh $VERSION locally, then retag."
-            exit 1
-          fi
-
-      - name: Install Qt6
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.7.3'
-          # Note: 'qtwayland' is NOT a separate module for linux desktop in
-          # aqtinstall — on Linux the Wayland platform plugin (libqwayland-
-          # generic.so / libqwayland-egl.so) ships with the base Qt install.
-          # We force linuxdeploy-plugin-qt to bundle it via EXTRA_PLATFORM_PLUGINS
-          # further below.
-          modules: 'qtshadertools'
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
 
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake \
-            ninja-build \
+            build-essential \
+            pkg-config \
+            qt6-base-dev \
+            qt6-base-dev-tools \
+            qt6-declarative-dev \
+            libqt6svg6-dev \
             libgl-dev \
             libxkbcommon-dev \
             libdbus-1-dev \
@@ -103,340 +52,37 @@ jobs:
             xdg-utils \
             file \
             libfuse2 \
-            libglib2.0-bin \
-            gvfs \
             dbus \
+            e2fsprogs \
             p7zip-full
+          sudo ln -sf /usr/bin/qmake6 /usr/local/bin/qmake
 
-      - name: Build QtWayland from source
-        if: startsWith(github.ref, 'refs/tags/v')
-        # aqtinstall's Linux desktop Qt 6.7.3 ships the QtWayland libs
-        # but omits the wayland-graphics-integration-client plugins
-        # (libqt-plugin-wayland-egl.so etc.), so Qt can't find a client
-        # buffer integration at runtime and the bundled AppImage aborts
-        # on any Wayland session with "Available client buffer
-        # integrations: QList()". Build qtwayland from the matching
-        # source tag against the aqt Qt and install into its prefix so
-        # linuxdeploy-plugin-qt picks up the plugins naturally.
-        run: |
-          QT_PREFIX=$(qmake6 -query QT_INSTALL_PREFIX 2>/dev/null || qmake -query QT_INSTALL_PREFIX)
-          echo "Qt prefix: $QT_PREFIX"
-          # Use the GitHub mirror — code.qt.io has intermittent network
-          # issues from GitHub Actions runners.
-          git clone --depth 1 --branch v6.7.3 https://github.com/qt/qtwayland.git qtwayland-src
-          cmake -S qtwayland-src -B qtwayland-src/build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
-            -DCMAKE_INSTALL_PREFIX="$QT_PREFIX"
-          cmake --build qtwayland-src/build --parallel
-          cmake --install qtwayland-src/build
-          echo "=== wayland-graphics-integration-client after install ==="
-          ls "$QT_PREFIX/plugins/wayland-graphics-integration-client/" || true
-
-      - name: Build
-        run: |
-          # HYPRFM_ENABLE_QML_CACHEGEN=ON forces qmlcachegen to compile QML
-          # files into the binary. The NO_CACHEGEN code path in Qt 6.7.3 was
-          # silently dropping qml/components/SettingsPanel.qml from the qrc;
-          # cachegen uses a different rcc path that's more reliable.
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX=/usr \
-            -DBUBBLE_DATA_DIR=/usr/share/bubble \
-            -DBUBBLE_ENABLE_QML_CACHEGEN=ON
-          cmake --build build --parallel
-
-      - name: Run tests
+      - name: Cargo Build
         env:
+          QMAKE: qmake6
+        run: |
+          cargo build --verbose --release
+
+      - name: Cargo Test
+        env:
+          QMAKE: qmake6
           QT_QPA_PLATFORM: offscreen
-        # The trash tests talk to gvfsd over the session bus, hence
-        # dbus-run-session. Tests that need a tool the runner lacks skip,
-        # which is why p7zip-full is installed above: without it every
-        # archive test skips and the suite goes green having run none.
         run: |
-          dbus-run-session -- ctest --test-dir build --output-on-failure --parallel 4 --timeout 300
+          dbus-run-session -- cargo test --workspace --verbose
 
-      - name: Install into AppDir
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          DESTDIR="$GITHUB_WORKSPACE/AppDir" cmake --install build
-
-      - name: Download linuxdeploy and Qt plugin
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage
-          printf '%s  %s\n' \
-            '421ca71d5c69ea97c6309276232990d43df1dcece0edfaa26bbf926ff96ed12e' \
-            'linuxdeploy-x86_64.AppImage' | sha256sum -c -
-          printf '%s  %s\n' \
-            '15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724' \
-            'linuxdeploy-plugin-qt-x86_64.AppImage' | sha256sum -c -
-          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
-
-      - name: Build AppImage
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-          # Force linuxdeploy-plugin-qt to bundle the Wayland platform plugin
-          # alongside xcb. Without this, Ubuntu's GNOME Wayland session loads
-          # an empty platform and the window renders black.
-          EXTRA_PLATFORM_PLUGINS: libqwayland-generic.so;libqwayland-egl.so
-          QML_SOURCES_PATHS: src/qml
-        run: |
-          set -euo pipefail
-          QT_PLUGIN_DIR=$(qmake6 -query QT_INSTALL_PLUGINS 2>/dev/null || qmake -query QT_INSTALL_PLUGINS)
-
-          ./linuxdeploy-x86_64.AppImage \
-            --appdir AppDir \
-            --plugin qt \
-            --desktop-file dist/io.github.soyeb_jim285.Bubble.desktop \
-            --icon-file dist/io.github.soyeb_jim285.Bubble.svg
-
-          deploy_deps_args=()
-          for plugin_dir in \
-            wayland-graphics-integration-client \
-            wayland-shell-integration \
-            wayland-decoration-client
-          do
-            if [ -d "$QT_PLUGIN_DIR/$plugin_dir" ]; then
-              mkdir -p AppDir/usr/plugins
-              rm -rf "AppDir/usr/plugins/$plugin_dir"
-              cp -a "$QT_PLUGIN_DIR/$plugin_dir" "AppDir/usr/plugins/"
-              deploy_deps_args+=(--deploy-deps-only "AppDir/usr/plugins/$plugin_dir")
-              echo "Bundled extra Qt plugin dir: $plugin_dir"
-            fi
-          done
-
-          echo "=== AppDir/usr/plugins ==="
-          ls AppDir/usr/plugins || true
-          echo "=== wayland-graphics-integration-client ==="
-          ls AppDir/usr/plugins/wayland-graphics-integration-client/ || true
-
-          scripts/prune-appdir.sh AppDir
-
-          OUTPUT="Bubble-${TAG_NAME}-x86_64.AppImage" \
-          ./linuxdeploy-x86_64.AppImage \
-            --appdir AppDir \
-            "${deploy_deps_args[@]}" \
-            --output appimage
-
-      - name: Verify bundled Wayland client integrations
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          test -d AppDir/usr/plugins/wayland-graphics-integration-client
-          test -n "$(ls -A AppDir/usr/plugins/wayland-graphics-integration-client)"
-
-      - name: Smoke-test AppImage
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-        # Boot the freshly-built AppImage on the offscreen QPA platform and
-        # capture its stderr. We're not trying to render anything — we just
-        # want Qt to load every QML type referenced from Main.qml so that
-        # any "is not a type" / "qrc:... not found" / "QQmlApplicationEngine
-        # failed to load component" failure aborts the release before it
-        # ships. v0.4.14 shipped a broken AppImage exactly because we had no
-        # such gate; never again.
-        run: |
-          chmod +x "Bubble-${TAG_NAME}-x86_64.AppImage"
-          set +e
-          # offscreen platform needs no display; software RHI dodges Mesa.
-          QT_QPA_PLATFORM=offscreen QSG_RHI_BACKEND=software \
-            timeout 10 "./Bubble-${TAG_NAME}-x86_64.AppImage" \
-            > smoke.stdout 2> smoke.stderr &
-          SMOKE_PID=$!
-          # Give the QML engine ~5s to parse Main.qml and instantiate every
-          # component, then SIGTERM it. Any QML load failure will already be
-          # on stderr by then.
-          sleep 5
-          kill -TERM $SMOKE_PID 2>/dev/null || true
-          wait $SMOKE_PID 2>/dev/null || true
-          set -e
-          echo "=== smoke stdout ==="
-          cat smoke.stdout || true
-          echo "=== smoke stderr ==="
-          cat smoke.stderr || true
-          if grep -E "is not a type|failed to load component|QQmlApplicationEngine failed|TypeError:|Unable to assign|Aborted \(core dumped\)|Segmentation fault|Failed to initialize graphics backend|Failed to create RHI" smoke.stderr; then
-            echo "Smoke test FAILED: AppImage cannot load its QML."
-            exit 1
-          fi
-          echo "Smoke test passed."
-
-      - name: Upload AppImage artifact
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Upload Binary Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bubble-appimage
-          path: Bubble-${{ github.ref_name }}-x86_64.AppImage
+          name: bubble-linux-x86_64
+          path: target/release/bubble
           if-no-files-found: error
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download AppImage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: bubble-appimage
-
-      # ─────────────────────────────────────────────────────────────────
-      # Flatpak publishing: build, sign with GPG, upload the ostree repo
-      # to soyeb-jim285/bubble-flatpak-repo (served at bubble.soyebjim.me
-      # via GitHub Pages) and export a single-file bundle as a release
-      # asset. Gated on tag pushes only so main-branch CI stays fast.
-
-      - name: Install Flatpak tooling
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          sudo apt-get install -y flatpak flatpak-builder
-          flatpak remote-add --user --if-not-exists flathub \
-              https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install -y --user flathub \
-              org.kde.Platform//6.9 org.kde.Sdk//6.9
-
-      - name: Import GPG signing key
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GPG_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.FLATPAK_GPG_PASSPHRASE }}
-          GPG_FINGERPRINT: ${{ secrets.FLATPAK_GPG_FINGERPRINT }}
-        run: |
-          mkdir -p "$HOME/.gnupg"
-          chmod 700 "$HOME/.gnupg"
-
-          # Configure gpg-agent to accept passphrases via --passphrase
-          # rather than prompting through pinentry. GitHub Actions runners
-          # have no TTY, so interactive pinentry fails with "Inappropriate
-          # ioctl for device" the moment ostree tries to sign a commit.
-          cat > "$HOME/.gnupg/gpg-agent.conf" <<'EOF'
-          allow-loopback-pinentry
-          allow-preset-passphrase
-          default-cache-ttl 7200
-          max-cache-ttl 7200
-          EOF
-          cat > "$HOME/.gnupg/gpg.conf" <<'EOF'
-          use-agent
-          pinentry-mode loopback
-          EOF
-          gpg-connect-agent reloadagent /bye
-
-          # Import the private key
-          printf '%s' "$GPG_KEY" | gpg --batch --import
-          gpg --list-secret-keys --keyid-format=long
-
-          # Prime the gpg-agent cache with the passphrase by doing one
-          # dummy signing operation. Subsequent sign calls from
-          # flatpak-builder / ostree will hit the cache instead of
-          # triggering pinentry. If the key has no passphrase,
-          # --passphrase "" is a valid empty input.
-          echo test | gpg --batch --yes \
-              --pinentry-mode loopback \
-              --passphrase "${GPG_PASSPHRASE:-}" \
-              --local-user "$GPG_FINGERPRINT" \
-              --clearsign > /dev/null
-
-      - name: Build and sign Flatpak repo
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GPG_FINGERPRINT: ${{ secrets.FLATPAK_GPG_FINGERPRINT }}
-        run: |
-          flatpak-builder --force-clean --user \
-            --repo=flatpak-repo \
-            --gpg-sign="$GPG_FINGERPRINT" \
-            --default-branch=stable \
-            flatpak-build \
-            io.github.soyeb_jim285.Bubble.yml
-          # Generate static deltas for efficient incremental updates
-          # and re-sign the summary file.
-          flatpak build-update-repo \
-            --generate-static-deltas \
-            --gpg-sign="$GPG_FINGERPRINT" \
-            flatpak-repo
-
-      - name: Build Flatpak bundle (release asset)
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          TAG_NAME: ${{ github.ref_name }}
-          GPG_FINGERPRINT: ${{ secrets.FLATPAK_GPG_FINGERPRINT }}
-        run: |
-          flatpak build-bundle flatpak-repo \
-            "Bubble-${TAG_NAME}-x86_64.flatpak" \
-            io.github.soyeb_jim285.Bubble stable \
-            --gpg-sign="$GPG_FINGERPRINT"
-
-      - name: Publish ostree repo to bubble-flatpak-repo
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          DEPLOY_KEY: ${{ secrets.FLATPAK_REPO_DEPLOY_KEY }}
-          TAG_NAME: ${{ github.ref_name }}
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          # printf '%s\n' guarantees a terminating newline; OpenSSH's
-          # PEM parser rejects keys without one with a cryptic
-          # "error in libcrypto" message.
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -t ed25519,rsa,ecdsa github.com >> ~/.ssh/known_hosts 2>/dev/null
-
-          # Sanity check the key parses cleanly before SSH does.
-          if ! ssh-keygen -l -f ~/.ssh/id_ed25519 > /dev/null; then
-            echo "Deploy key failed to parse. First and last lines:"
-            head -1 ~/.ssh/id_ed25519
-            tail -1 ~/.ssh/id_ed25519
-            exit 1
-          fi
-
-          git clone git@github.com:soyeb-jim285/bubble-flatpak-repo.git pages
-          cd pages
-          git config user.name "bubble release bot"
-          git config user.email "release-bot@bubble.local"
-
-          rm -rf repo
-          cp -a ../flatpak-repo repo
-
-          git add -A repo/
-          if git diff --cached --quiet; then
-            echo "No changes to publish"
-          else
-            git commit -m "Publish io.github.soyeb_jim285.Bubble ${TAG_NAME}"
-            git push origin main
-          fi
-
-      # The annotated tag's message is the release notes (scripts/release.sh
-      # writes it from a notes file), so the body is reviewed before the push
-      # instead of auto-generated from commit titles.
-      - name: Release notes from the tag message
-        if: startsWith(github.ref, 'refs/tags/v')
-        # actions/checkout leaves the tag peeled to its commit, so re-fetch
-        # the annotated tag object before reading its message.
-        run: |
-          git fetch --force --no-tags origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
-          git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" > release-notes.md
-          test -s release-notes.md
-          head -3 release-notes.md
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            Bubble-${{ github.ref_name }}-x86_64.AppImage
-            Bubble-${{ github.ref_name }}-x86_64.flatpak
-          body_path: release-notes.md
-
-      - name: Trigger website rebuild
-        if: startsWith(github.ref, 'refs/tags/v')
+          files: target/release/bubble
+          draft: false
+          prerelease: false
         env:
-          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
-        run: |
-          gh api repos/soyeb-jim285/bubble-site/dispatches \
-            -f event_type=new-release
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

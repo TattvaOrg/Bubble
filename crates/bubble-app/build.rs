@@ -7,6 +7,9 @@ fn main() {
             config.flag(f);
         }
     }
+    if let Ok(lib_path) = std::env::var("DEP_QT_LIBRARY_PATH") {
+        println!("cargo:rustc-link-search=native={}", lib_path);
+    }
     println!("cargo:rustc-link-lib=Qt6Svg");
     config.include(&qt_include_path);
     config.include(format!("{}/QtCore", qt_include_path));
