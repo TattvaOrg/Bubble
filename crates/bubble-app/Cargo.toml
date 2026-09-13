@@ -14,3 +14,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 libc = "0.2.189"
 qmetaobject = "0.2.10"
+walkdir = "2.5.0"
+regex = "1.13.1"
+chrono = "0.4.40"
+toml = "0.8.23"
+
