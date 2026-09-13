@@ -68,6 +68,24 @@ ApplicationWindow {
                 root.scheduleActivePaneFocus()
             }
         }
+        function onCurrentPathChanged() {
+            if (tabModel.currentPath && tabModel.currentPath !== "") {
+                fsModel.setRootPath(tabModel.currentPath)
+                root.syncMillerParentModel(tabModel.currentPath)
+                root.setPaneRecents("primary", false)
+                root.clearPaneSearch("primary")
+                root.applyFolderSort(tabModel.currentPath)
+                root.scheduleActivePaneFocus()
+            }
+        }
+        function onSecondaryCurrentPathChanged() {
+            if (tabModel.secondaryCurrentPath && tabModel.secondaryCurrentPath !== "") {
+                splitFsModel.setRootPath(tabModel.secondaryCurrentPath)
+                root.setPaneRecents("secondary", false)
+                root.clearPaneSearch("secondary")
+                root.scheduleActivePaneFocus()
+            }
+        }
         function onLastTabClosed() {
             Qt.quit()
         }
@@ -243,12 +261,14 @@ ApplicationWindow {
     }
 
     function panePath(pane) {
-        if (!tabModel.activeTab)
-            return fsModel.homePath()
-
-        return pane === "secondary"
-            ? tabModel.activeTab.secondaryCurrentPath
-            : tabModel.activeTab.currentPath
+        if (pane === "secondary") {
+            return (splitFsModel.rootPath && splitFsModel.rootPath !== "")
+                ? splitFsModel.rootPath
+                : (tabModel.activeTab ? tabModel.activeTab.secondaryCurrentPath : fsModel.homePath())
+        }
+        return (fsModel.rootPath && fsModel.rootPath !== "")
+            ? fsModel.rootPath
+            : (tabModel.activeTab ? tabModel.activeTab.currentPath : fsModel.homePath())
     }
 
     function pathDisplayName(path) {
@@ -563,16 +583,25 @@ ApplicationWindow {
     }
 
     function navigatePaneTo(pane, path) {
-        if (!tabModel.activeTab || !path)
+        if (!path)
             return
 
         ensureMountedAndRun(path, function() {
             root.setPaneRecents(pane, false)
             root.clearPaneSearch(pane)
-            if (pane === "secondary" && splitViewEnabled())
-                tabModel.activeTab.navigateSecondaryTo(path)
-            else
-                tabModel.activeTab.navigateTo(path)
+            if (pane === "secondary" && splitViewEnabled()) {
+                if (tabModel.activeTab)
+                    tabModel.activeTab.navigateSecondaryTo(path)
+                tabModel.navigateSecondaryTo(path)
+                splitFsModel.setRootPath(path)
+            } else {
+                if (tabModel.activeTab)
+                    tabModel.activeTab.navigateTo(path)
+                tabModel.navigateTo(path)
+                fsModel.setRootPath(path)
+                root.syncMillerParentModel(path)
+                root.applyFolderSort(path)
+            }
             root.scheduleActivePaneFocus()
         })
     }
@@ -590,6 +619,10 @@ ApplicationWindow {
             tabModel.addTab()
             if (tabModel.activeTab)
                 tabModel.activeTab.navigateTo(path)
+            tabModel.navigateTo(path)
+            fsModel.setRootPath(path)
+            root.syncMillerParentModel(path)
+            root.applyFolderSort(path)
             root.scheduleActivePaneFocus()
         })
     }
@@ -757,27 +790,41 @@ ApplicationWindow {
     }
 
     function goActivePaneBack() {
-        if (!tabModel.activeTab)
-            return
-
-        if (activePane === "secondary" && splitViewEnabled())
-            tabModel.activeTab.secondaryGoBack()
-        else
-            tabModel.activeTab.goBack()
+        if (activePane === "secondary" && splitViewEnabled()) {
+            if (tabModel.activeTab)
+                tabModel.activeTab.secondaryGoBack()
+            tabModel.secondaryGoBack()
+            splitFsModel.setRootPath(tabModel.secondaryCurrentPath)
+        } else {
+            if (tabModel.activeTab)
+                tabModel.activeTab.goBack()
+            tabModel.goBack()
+            fsModel.setRootPath(tabModel.currentPath)
+            root.syncMillerParentModel(tabModel.currentPath)
+            root.applyFolderSort(tabModel.currentPath)
+        }
+        root.scheduleActivePaneFocus()
     }
 
     function goActivePaneForward() {
-        if (!tabModel.activeTab)
-            return
-
-        if (activePane === "secondary" && splitViewEnabled())
-            tabModel.activeTab.secondaryGoForward()
-        else
-            tabModel.activeTab.goForward()
+        if (activePane === "secondary" && splitViewEnabled()) {
+            if (tabModel.activeTab)
+                tabModel.activeTab.secondaryGoForward()
+            tabModel.secondaryGoForward()
+            splitFsModel.setRootPath(tabModel.secondaryCurrentPath)
+        } else {
+            if (tabModel.activeTab)
+                tabModel.activeTab.goForward()
+            tabModel.goForward()
+            fsModel.setRootPath(tabModel.currentPath)
+            root.syncMillerParentModel(tabModel.currentPath)
+            root.applyFolderSort(tabModel.currentPath)
+        }
+        root.scheduleActivePaneFocus()
     }
 
     function goActivePaneUp() {
-        if (!tabModel.activeTab || root.paneIsRecents(activePane))
+        if (root.paneIsRecents(activePane))
             return
 
         var currentPath = panePath(activePane)
@@ -801,10 +848,20 @@ ApplicationWindow {
             return
         }
 
-        if (activePane === "secondary" && splitViewEnabled())
-            tabModel.activeTab.secondaryGoUp()
-        else
-            tabModel.activeTab.goUp()
+        if (activePane === "secondary" && splitViewEnabled()) {
+            if (tabModel.activeTab)
+                tabModel.activeTab.secondaryGoUp()
+            tabModel.secondaryGoUp()
+            splitFsModel.setRootPath(tabModel.secondaryCurrentPath)
+        } else {
+            if (tabModel.activeTab)
+                tabModel.activeTab.goUp()
+            tabModel.goUp()
+            fsModel.setRootPath(tabModel.currentPath)
+            root.syncMillerParentModel(tabModel.currentPath)
+            root.applyFolderSort(tabModel.currentPath)
+        }
+        root.scheduleActivePaneFocus()
     }
 
     function toggleSplitView() {
@@ -830,21 +887,15 @@ ApplicationWindow {
     }
 
     function activePaneCanGoBack() {
-        if (!tabModel.activeTab)
-            return false
-
-        return activePane === "secondary" && splitViewEnabled()
-            ? tabModel.activeTab.secondaryCanGoBack
-            : tabModel.activeTab.canGoBack
+        if (activePane === "secondary" && splitViewEnabled())
+            return tabModel.secondaryCanGoBack || (tabModel.activeTab ? tabModel.activeTab.secondaryCanGoBack : false)
+        return tabModel.canGoBack || (tabModel.activeTab ? tabModel.activeTab.canGoBack : false)
     }
 
     function activePaneCanGoForward() {
-        if (!tabModel.activeTab)
-            return false
-
-        return activePane === "secondary" && splitViewEnabled()
-            ? tabModel.activeTab.secondaryCanGoForward
-            : tabModel.activeTab.canGoForward
+        if (activePane === "secondary" && splitViewEnabled())
+            return tabModel.secondaryCanGoForward || (tabModel.activeTab ? tabModel.activeTab.secondaryCanGoForward : false)
+        return tabModel.canGoForward || (tabModel.activeTab ? tabModel.activeTab.canGoForward : false)
     }
 
     function activeItemCount() {

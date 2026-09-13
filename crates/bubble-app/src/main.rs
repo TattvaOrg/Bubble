@@ -470,6 +470,12 @@ fn main() {
     let vault_service = QObjectBox::new(VaultService::new(config_dir));
 
     let mut engine = QmlEngine::new();
+    qmetaobject::qml_register_type::<models::TabModel>(
+        std::ffi::CStr::from_bytes_with_nul(b"Bubble\0").unwrap(),
+        1,
+        0,
+        std::ffi::CStr::from_bytes_with_nul(b"TabModel\0").unwrap(),
+    );
     register_image_providers(&mut engine);
 
     // Add import paths for QML modules (Bubble, Quill, Icons)

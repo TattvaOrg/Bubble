@@ -178,9 +178,20 @@ pub struct TabListModel {
 
     pub activeIndex: qt_property!(i32; NOTIFY activeIndexChanged),
     pub count: qt_property!(i32; NOTIFY countChanged),
-    pub activeTab: qt_property!(QVariant; NOTIFY activeIndexChanged),
+    pub activeTab: qt_property!(QVariant; NOTIFY activeTabChanged),
+    pub currentPath: qt_property!(QString; NOTIFY currentPathChanged),
+    pub canGoBack: qt_property!(bool; NOTIFY historyChanged),
+    pub canGoForward: qt_property!(bool; NOTIFY historyChanged),
+    pub secondaryCurrentPath: qt_property!(QString; NOTIFY secondaryCurrentPathChanged),
+    pub secondaryCanGoBack: qt_property!(bool; NOTIFY secondaryHistoryChanged),
+    pub secondaryCanGoForward: qt_property!(bool; NOTIFY secondaryHistoryChanged),
 
     pub activeIndexChanged: qt_signal!(),
+    pub activeTabChanged: qt_signal!(),
+    pub currentPathChanged: qt_signal!(),
+    pub historyChanged: qt_signal!(),
+    pub secondaryCurrentPathChanged: qt_signal!(),
+    pub secondaryHistoryChanged: qt_signal!(),
     pub countChanged: qt_signal!(),
     pub lastTabClosed: qt_signal!(),
     pub sessionChanged: qt_signal!(),
@@ -191,6 +202,14 @@ pub struct TabListModel {
     pub closeTab: qt_method!(fn(&mut self, index: i32)),
     pub reopenClosedTab: qt_method!(fn(&mut self)),
     pub tabAt: qt_method!(fn(&self, index: i32) -> QVariant),
+    pub navigateTo: qt_method!(fn(&mut self, path: QString)),
+    pub goBack: qt_method!(fn(&mut self)),
+    pub goForward: qt_method!(fn(&mut self)),
+    pub goUp: qt_method!(fn(&mut self)),
+    pub navigateSecondaryTo: qt_method!(fn(&mut self, path: QString)),
+    pub secondaryGoBack: qt_method!(fn(&mut self)),
+    pub secondaryGoForward: qt_method!(fn(&mut self)),
+    pub secondaryGoUp: qt_method!(fn(&mut self)),
 
     tabs: Vec<QObjectBox<TabModel>>,
 }
@@ -198,10 +217,17 @@ pub struct TabListModel {
 impl TabListModel {
     pub fn new(home_path: &str) -> Self {
         let first_tab = QObjectBox::new(TabModel::new(home_path));
+        let tab_ptr = first_tab.pinned();
         let mut list = Self {
             activeIndex: 0,
             count: 1,
-            activeTab: QVariant::from(first_tab.pinned()),
+            activeTab: QVariant::from(tab_ptr),
+            currentPath: QString::from(home_path),
+            canGoBack: false,
+            canGoForward: false,
+            secondaryCurrentPath: QString::from(home_path),
+            secondaryCanGoBack: false,
+            secondaryCanGoForward: false,
             tabs: vec![first_tab],
             ..Default::default()
         };
@@ -212,13 +238,32 @@ impl TabListModel {
     fn update_active(&mut self) {
         if self.tabs.is_empty() {
             self.activeTab = QVariant::default();
+            self.currentPath = QString::default();
+            self.canGoBack = false;
+            self.canGoForward = false;
+            self.secondaryCurrentPath = QString::default();
+            self.secondaryCanGoBack = false;
+            self.secondaryCanGoForward = false;
         } else {
             let idx = (self.activeIndex as usize).min(self.tabs.len() - 1);
             self.activeIndex = idx as i32;
-            self.activeTab = QVariant::from(self.tabs[idx].pinned());
+            let tab_ptr = self.tabs[idx].pinned();
+            self.activeTab = QVariant::from(tab_ptr);
+            let borrowed = tab_ptr.borrow();
+            self.currentPath = borrowed.currentPath.clone();
+            self.canGoBack = borrowed.canGoBack;
+            self.canGoForward = borrowed.canGoForward;
+            self.secondaryCurrentPath = borrowed.secondaryCurrentPath.clone();
+            self.secondaryCanGoBack = borrowed.secondaryCanGoBack;
+            self.secondaryCanGoForward = borrowed.secondaryCanGoForward;
         }
         self.count = self.tabs.len() as i32;
         self.activeIndexChanged();
+        self.activeTabChanged();
+        self.currentPathChanged();
+        self.historyChanged();
+        self.secondaryCurrentPathChanged();
+        self.secondaryHistoryChanged();
         self.countChanged();
     }
 
@@ -289,6 +334,118 @@ impl TabListModel {
             QVariant::from(self.tabs[index as usize].pinned())
         } else {
             QVariant::default()
+        }
+    }
+
+    pub fn navigateTo(&mut self, path: QString) {
+        if !self.tabs.is_empty() {
+            let idx = (self.activeIndex as usize).min(self.tabs.len() - 1);
+            let pinned = self.tabs[idx].pinned();
+            pinned.borrow_mut().navigateTo(path.clone());
+            let borrowed = pinned.borrow();
+            self.currentPath = path;
+            self.canGoBack = borrowed.canGoBack;
+            self.canGoForward = borrowed.canGoForward;
+            self.currentPathChanged();
+            self.historyChanged();
+        }
+    }
+
+    pub fn goBack(&mut self) {
+        if !self.tabs.is_empty() {
+            let idx = (self.activeIndex as usize).min(self.tabs.len() - 1);
+            let pinned = self.tabs[idx].pinned();
+            pinned.borrow_mut().goBack();
+            let borrowed = pinned.borrow();
+            self.currentPath = borrowed.currentPath.clone();
+            self.canGoBack = borrowed.canGoBack;
+            self.canGoForward = borrowed.canGoForward;
+            self.currentPathChanged();
+            self.historyChanged();
+        }
+    }
+
+    pub fn goForward(&mut self) {
+        if !self.tabs.is_empty() {
+            let idx = (self.activeIndex as usize).min(self.tabs.len() - 1);
+            let pinned = self.tabs[idx].pinned();
+            pinned.borrow_mut().goForward();
+            let borrowed = pinned.borrow();
+            self.currentPath = borrowed.currentPath.clone();
+            self.canGoBack = borrowed.canGoBack;
+            self.canGoForward = borrowed.canGoForward;
+            self.currentPathChanged();
+            self.historyChanged();
+        }
+    }
+
+    pub fn goUp(&mut self) {
+        if !self.tabs.is_empty() {
+            let idx = (self.activeIndex as usize).min(self.tabs.len() - 1);
+            let pinned = self.tabs[idx].pinned();
+            pinned.borrow_mut().goUp();
+            let borrowed = pinned.borrow();
+            self.currentPath = borrowed.currentPath.clone();
+            self.canGoBack = borrowed.canGoBack;
+            self.canGoForward = borrowed.canGoForward;
+            self.currentPathChanged();
+            self.historyChanged();
+        }
+    }
+
+    pub fn navigateSecondaryTo(&mut self, path: QString) {
+        if !self.tabs.is_empty() {
+            let idx = (self.activeIndex as usize).min(self.tabs.len() - 1);
+            let pinned = self.tabs[idx].pinned();
+            pinned.borrow_mut().navigateSecondaryTo(path.clone());
+            let borrowed = pinned.borrow();
+            self.secondaryCurrentPath = path;
+            self.secondaryCanGoBack = borrowed.secondaryCanGoBack;
+            self.secondaryCanGoForward = borrowed.secondaryCanGoForward;
+            self.secondaryCurrentPathChanged();
+            self.secondaryHistoryChanged();
+        }
+    }
+
+    pub fn secondaryGoBack(&mut self) {
+        if !self.tabs.is_empty() {
+            let idx = (self.activeIndex as usize).min(self.tabs.len() - 1);
+            let pinned = self.tabs[idx].pinned();
+            pinned.borrow_mut().secondaryGoBack();
+            let borrowed = pinned.borrow();
+            self.secondaryCurrentPath = borrowed.secondaryCurrentPath.clone();
+            self.secondaryCanGoBack = borrowed.secondaryCanGoBack;
+            self.secondaryCanGoForward = borrowed.secondaryCanGoForward;
+            self.secondaryCurrentPathChanged();
+            self.secondaryHistoryChanged();
+        }
+    }
+
+    pub fn secondaryGoForward(&mut self) {
+        if !self.tabs.is_empty() {
+            let idx = (self.activeIndex as usize).min(self.tabs.len() - 1);
+            let pinned = self.tabs[idx].pinned();
+            pinned.borrow_mut().secondaryGoForward();
+            let borrowed = pinned.borrow();
+            self.secondaryCurrentPath = borrowed.secondaryCurrentPath.clone();
+            self.secondaryCanGoBack = borrowed.secondaryCanGoBack;
+            self.secondaryCanGoForward = borrowed.secondaryCanGoForward;
+            self.secondaryCurrentPathChanged();
+            self.secondaryHistoryChanged();
+        }
+    }
+
+    pub fn secondaryGoUp(&mut self) {
+        if !self.tabs.is_empty() {
+            let idx = (self.activeIndex as usize).min(self.tabs.len() - 1);
+            let pinned = self.tabs[idx].pinned();
+            pinned.borrow_mut().secondaryGoUp();
+            let borrowed = pinned.borrow();
+            self.secondaryCurrentPath = borrowed.secondaryCurrentPath.clone();
+            self.secondaryCanGoBack = borrowed.secondaryCanGoBack;
+            self.secondaryCanGoForward = borrowed.secondaryCanGoForward;
+            self.secondaryCurrentPathChanged();
+            self.secondaryHistoryChanged();
         }
     }
 }
