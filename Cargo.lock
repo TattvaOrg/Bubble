@@ -38,9 +38,12 @@ version = "0.6.1"
 dependencies = [
  "bubble-core",
  "chrono",
+ "cpp",
+ "cpp_build",
  "dirs",
  "libc",
  "qmetaobject",
+ "qttypes",
  "regex",
  "serde",
  "serde_json",

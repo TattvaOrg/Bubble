@@ -1,4 +1,5 @@
 #![allow(non_snake_case, unused_imports)]
+#![recursion_limit = "4096"]
 
 use qmetaobject::*;
 use std::env;
@@ -10,6 +11,345 @@ pub mod models;
 
 use services::*;
 use models::*;
+
+use cpp::cpp;
+
+cpp! {{
+    #include <QtQuick/QQuickImageProvider>
+    #include <QtGui/QIcon>
+    #include <QtGui/QPixmap>
+    #include <QtGui/QImage>
+    #include <QtGui/QPainter>
+    #include <QtSvg/QSvgRenderer>
+    #include <QtQml/QQmlEngine>
+    #include <QtCore/QDir>
+    #include <QtCore/QFile>
+    #include <QtCore/QHash>
+    #include <QtCore/QMutex>
+    #include <QtCore/QMutexLocker>
+    #include <QtCore/QString>
+    #include <QtCore/QStringList>
+    #include <QtCore/QSize>
+    #include <algorithm>
+
+    class IconProvider : public QQuickImageProvider
+    {
+    public:
+        explicit IconProvider(const QString &primaryTheme = QStringLiteral("Adwaita"))
+            : QQuickImageProvider(QQuickImageProvider::Image)
+        {
+            rebuildSearchDirs();
+            setPrimaryTheme(primaryTheme);
+        }
+
+        void setPrimaryTheme(const QString &primaryTheme)
+        {
+            const QString themeName = primaryTheme.trimmed().isEmpty() ? QStringLiteral("Adwaita")
+                                                                        : primaryTheme.trimmed();
+            QMutexLocker locker(&m_cacheMutex);
+            if (m_primaryTheme == themeName && !m_primaryDirs.isEmpty())
+                return;
+
+            m_primaryTheme = themeName;
+            m_primaryDirs.clear();
+            m_fallbackDirs.clear();
+            m_cache.clear();
+
+            for (const auto &dir : m_searchDirs) {
+                const QString path = dir + "/" + themeName;
+                if (QDir(path).exists() && !m_primaryDirs.contains(path))
+                    m_primaryDirs.append(path);
+            }
+
+            const QStringList fallbacks = {
+                QStringLiteral("breeze"),
+                QStringLiteral("Papirus"),
+                QStringLiteral("Adwaita"),
+                QStringLiteral("AdwaitaLegacy"),
+                QStringLiteral("hicolor")
+            };
+            for (const auto &theme : fallbacks) {
+                if (theme == themeName)
+                    continue;
+
+                for (const auto &dir : m_searchDirs) {
+                    const QString path = dir + "/" + theme;
+                    if (QDir(path).exists() && !m_fallbackDirs.contains(path))
+                        m_fallbackDirs.append(path);
+                }
+            }
+        }
+
+        QImage requestImage(const QString &id, QSize *size, const QSize &requestedSize) override
+        {
+            int sz = (requestedSize.width() > 0) ? requestedSize.width() : 48;
+            QSize iconSize(sz, sz);
+
+            QString iconName = id;
+            QColor tintColor;
+            QString requestedTheme;
+            int qmark = id.indexOf('?');
+            if (qmark >= 0) {
+                iconName = id.left(qmark);
+                QString params = id.mid(qmark + 1);
+                for (const auto &param : params.split('&')) {
+                    if (param.startsWith("color="))
+                        tintColor = QColor(param.mid(6));
+                    else if (param.startsWith("theme="))
+                        requestedTheme = param.mid(6);
+                }
+            }
+            if (!requestedTheme.isEmpty())
+                setPrimaryTheme(requestedTheme);
+
+            bool isSymbolic = iconName.endsWith("-symbolic");
+
+            const QString tintKey = tintColor.isValid() ? tintColor.name(QColor::HexArgb) : QString();
+            QString cacheKey;
+            {
+                QMutexLocker locker(&m_cacheMutex);
+                cacheKey = m_primaryTheme + QLatin1Char('\x1f')
+                    + iconName + QLatin1Char('\x1f')
+                    + QString::number(sz) + QLatin1Char('\x1f')
+                    + tintKey;
+                const auto cached = m_cache.constFind(cacheKey);
+                if (cached != m_cache.constEnd()) {
+                    if (size)
+                        *size = cached->size();
+                    return *cached;
+                }
+            }
+
+            QString svgPath = findIconIn(iconName, sz, m_primaryDirs);
+
+            if (svgPath.isEmpty()) {
+                if (isSymbolic) {
+                    QImage empty(1, 1, QImage::Format_ARGB32_Premultiplied);
+                    empty.fill(Qt::transparent);
+                    if (size) *size = QSize(0, 0);
+                    remember(cacheKey, empty);
+                    return empty;
+                }
+                svgPath = findIconIn(iconName, sz, m_fallbackDirs);
+                if (svgPath.isEmpty() && iconName.contains("folder"))
+                    svgPath = findIconIn(QStringLiteral("folder"), sz, m_fallbackDirs);
+                if (svgPath.isEmpty())
+                    svgPath = findIconIn(QStringLiteral("text-x-generic"), sz, m_primaryDirs);
+                if (svgPath.isEmpty())
+                    svgPath = findIconIn(QStringLiteral("text-x-generic"), sz, m_fallbackDirs);
+            }
+
+            // Also try QIcon::fromTheme fallback
+            if (svgPath.isEmpty()) {
+                QIcon icon = QIcon::fromTheme(iconName);
+                if (icon.isNull() && iconName.contains("folder")) {
+                    icon = QIcon::fromTheme(QStringLiteral("folder"));
+                }
+                if (icon.isNull()) {
+                    icon = QIcon::fromTheme(QStringLiteral("text-x-generic"));
+                }
+                if (!icon.isNull()) {
+                    QPixmap pix = icon.pixmap(iconSize);
+                    if (!pix.isNull()) {
+                        QImage img = pix.toImage();
+                        if (size) *size = iconSize;
+                        remember(cacheKey, img);
+                        return img;
+                    }
+                }
+            }
+
+            if (svgPath.isEmpty()) {
+                if (size) *size = iconSize;
+                QImage empty(iconSize, QImage::Format_ARGB32_Premultiplied);
+                empty.fill(Qt::transparent);
+                remember(cacheKey, empty);
+                return empty;
+            }
+
+            QImage img(iconSize, QImage::Format_ARGB32_Premultiplied);
+            img.fill(Qt::transparent);
+
+            if (svgPath.endsWith(".svg") || svgPath.endsWith(".svgz")) {
+                QSvgRenderer renderer(svgPath);
+                if (renderer.isValid()) {
+                    QPainter painter(&img);
+                    renderer.render(&painter);
+                    painter.end();
+                }
+            } else {
+                QImage loaded(svgPath);
+                if (!loaded.isNull())
+                    img = loaded.scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            }
+
+            if (tintColor.isValid()) {
+                for (int y = 0; y < img.height(); ++y) {
+                    QRgb *line = reinterpret_cast<QRgb*>(img.scanLine(y));
+                    for (int x = 0; x < img.width(); ++x) {
+                        int a = qAlpha(line[x]);
+                        if (a > 0)
+                            line[x] = qRgba(tintColor.red(), tintColor.green(), tintColor.blue(), a);
+                    }
+                }
+            }
+
+            if (size)
+                *size = iconSize;
+            remember(cacheKey, img);
+            return img;
+        }
+
+    private:
+        void remember(const QString &key, const QImage &image)
+        {
+            QMutexLocker locker(&m_cacheMutex);
+            if (m_cache.size() > 1024)
+                m_cache.clear();
+            m_cache.insert(key, image);
+        }
+
+        void rebuildSearchDirs()
+        {
+            m_searchDirs.clear();
+            const QString home = QDir::homePath();
+            m_searchDirs.append(home + "/.icons");
+            m_searchDirs.append(home + "/.local/share/icons");
+            m_searchDirs.append(QStringLiteral("/usr/share/icons"));
+            m_searchDirs.append(QStringLiteral("/usr/local/share/icons"));
+
+            const QString xdgDirs = qEnvironmentVariable("XDG_DATA_DIRS", "/usr/share:/usr/local/share");
+            for (const auto &dir : xdgDirs.split(':')) {
+                const QString iconDir = dir + "/icons";
+                if (!m_searchDirs.contains(iconDir))
+                    m_searchDirs.append(iconDir);
+            }
+        }
+
+        QStringList sizeCandidates(int size) const
+        {
+            QList<int> sizes = {16, 22, 24, 32, 48, 64, 96, 128, 256, 512};
+            if (!sizes.contains(size))
+                sizes.append(size);
+            std::sort(sizes.begin(), sizes.end(), [size](int a, int b) {
+                const bool aUp = a >= size, bUp = b >= size;
+                if (aUp != bUp)
+                    return aUp;
+                return aUp ? a < b : a > b;
+            });
+            QStringList out;
+            for (int s : sizes)
+                out << QString::number(s);
+            return out;
+        }
+
+        QString findIconIn(const QString &name, int size, const QStringList &themeDirs) const
+        {
+            static const QStringList categories = {
+                QStringLiteral("places"), QStringLiteral("actions"), QStringLiteral("mimetypes"), QStringLiteral("devices"),
+                QStringLiteral("status"), QStringLiteral("apps"), QStringLiteral("categories"), QStringLiteral("emblems")
+            };
+            static const QStringList extensions = {QStringLiteral(".svg"), QStringLiteral(".png")};
+
+            for (const auto &themeDir : themeDirs) {
+                for (const auto &cat : categories) {
+                    QString path = themeDir + "/scalable/" + cat + "/" + name + ".svg";
+                    if (QFile::exists(path))
+                        return path;
+                }
+
+                for (const auto &cat : categories) {
+                    QString path = themeDir + "/symbolic/" + cat + "/" + name + ".svg";
+                    if (QFile::exists(path))
+                        return path;
+                }
+
+                const QStringList numSizes = sizeCandidates(size);
+                for (const auto &cat : categories) {
+                    for (const auto &sz : numSizes) {
+                        for (const auto &ext : extensions) {
+                            QString path = themeDir + "/" + cat + "/" + sz + "/" + name + ext;
+                            if (QFile::exists(path))
+                                return path;
+                        }
+                    }
+                }
+
+                QStringList sqSizes;
+                for (const auto &sz : numSizes)
+                    sqSizes << sz + "x" + sz;
+                for (const auto &sz : sqSizes) {
+                    for (const auto &cat : categories) {
+                        for (const auto &ext : extensions) {
+                            QString path = themeDir + "/" + sz + "/" + cat + "/" + name + ext;
+                            if (QFile::exists(path))
+                                return path;
+                        }
+                    }
+                }
+            }
+
+            return {};
+        }
+
+        QString m_primaryTheme;
+        QStringList m_searchDirs;
+        QStringList m_primaryDirs;
+        QStringList m_fallbackDirs;
+        QHash<QString, QImage> m_cache;
+        QMutex m_cacheMutex;
+    };
+
+    class ThumbnailProvider : public QQuickImageProvider {
+    public:
+        ThumbnailProvider() : QQuickImageProvider(QQuickImageProvider::Image) {}
+        QImage requestImage(const QString &id, QSize *size, const QSize &requestedSize) override {
+            int sz = (requestedSize.width() > 0) ? requestedSize.width() : 128;
+            QSize thumbSize(sz, sz);
+            if (size) *size = thumbSize;
+
+            QString path = id;
+            int qmark = id.indexOf('?');
+            if (qmark >= 0) {
+                path = id.left(qmark);
+            }
+
+            QImage img(path);
+            if (!img.isNull()) {
+                return img.scaled(thumbSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            }
+
+            QImage empty(thumbSize, QImage::Format_ARGB32_Premultiplied);
+            empty.fill(Qt::transparent);
+            return empty;
+        }
+    };
+}}
+
+pub fn register_image_providers(engine: &mut QmlEngine) {
+    let engine_ptr = engine.cpp_ptr();
+    unsafe {
+        cpp!([engine_ptr as "QQmlEngine *"] {
+            engine_ptr->addImageProvider(QStringLiteral("icon"), new IconProvider);
+            engine_ptr->addImageProvider(QStringLiteral("thumbnail"), new ThumbnailProvider);
+            engine_ptr->addImageProvider(QStringLiteral("pdfpreview"), new ThumbnailProvider);
+        });
+    }
+}
+
+pub fn test_load_icon(engine: &mut QmlEngine, icon_name: &str) -> bool {
+    let engine_ptr = engine.cpp_ptr();
+    let qname = QString::from(icon_name);
+    unsafe {
+        cpp!([engine_ptr as "QQmlEngine *", qname as "QString"] -> bool as "bool" {
+            auto provider = dynamic_cast<QQuickImageProvider *>(engine_ptr->imageProvider(QStringLiteral("icon")));
+            if (!provider) return false;
+            QSize size;
+            QImage img = provider->requestImage(qname, &size, QSize(48, 48));
+            return !img.isNull() && img.width() == 48 && img.height() == 48;
+        })
+    }
+}
 
 const BUBBLE_VERSION: &str = "0.6.1";
 
@@ -130,6 +470,7 @@ fn main() {
     let vault_service = QObjectBox::new(VaultService::new(config_dir));
 
     let mut engine = QmlEngine::new();
+    register_image_providers(&mut engine);
 
     // Add import paths for QML modules (Bubble, Quill, Icons)
     let mut qml_import_paths = vec![
@@ -240,6 +581,7 @@ mod tests {
     #[test]
     fn test_qml_engine_context_properties() {
         let mut engine = QmlEngine::new();
+        register_image_providers(&mut engine);
         engine.add_import_path("../../src/qml".into());
 
         let theme = QObjectBox::new(ThemeLoader::new());
@@ -262,6 +604,8 @@ mod tests {
                 }
             }
         "#.into());
+
+        assert!(test_load_icon(&mut engine, "folder?theme=Adwaita"), "Folder icon must be loaded and non-null");
     }
 
     #[test]

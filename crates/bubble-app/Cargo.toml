@@ -18,4 +18,8 @@ walkdir = "2.5.0"
 regex = "1.13.1"
 chrono = "0.4.40"
 toml = "0.8.23"
+cpp = "0.5.11"
+qttypes = { version = "0.2.12", features = ["qtquick"] }
 
+[build-dependencies]
+cpp_build = "0.5.11"
