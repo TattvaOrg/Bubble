@@ -246,4 +246,143 @@ mod tests {
             }
         "#.into());
     }
+
+    #[test]
+    fn test_filesystem_model_operations() {
+        let mut fs = FileSystemModel::new();
+        fs.setRootPath(QString::from("/tmp"));
+        assert_eq!(fs.rootPath.to_string(), "/tmp");
+
+        let props = fs.fileProperties(QString::from("/tmp"));
+        let p_map = <QVariantMap as QMetaType>::from_qvariant(props).unwrap();
+        assert!(p_map.contains(QString::from("name")));
+        assert!(p_map.contains(QString::from("isDir")));
+        assert!(p_map.contains(QString::from("permissions")));
+        assert!(p_map.contains(QString::from("mimeType")));
+
+        let mut paths_list = QVariantList::default();
+        paths_list.push(QString::from("/tmp").to_qvariant());
+        let counts = fs.folderItemCounts(paths_list.into());
+        assert!(counts.is_valid());
+
+        let apps = fs.allInstalledApps();
+        assert!(apps.is_valid());
+    }
+
+    #[test]
+    fn test_tab_model_lifecycle() {
+        let mut tabs = TabListModel::new("/tmp");
+        assert_eq!(tabs.count, 1);
+
+        tabs.addTab();
+        assert_eq!(tabs.count, 2);
+
+        // Opening an existing path reuses the active tab
+        tabs.openPath(QString::from("/tmp"));
+        assert_eq!(tabs.count, 2);
+
+        // Opening a new path creates a new tab
+        tabs.openPath(QString::from("/usr"));
+        assert_eq!(tabs.count, 3);
+
+        tabs.closeTab(2);
+        assert_eq!(tabs.count, 2);
+
+        tabs.closeTab(1);
+        assert_eq!(tabs.count, 1);
+    }
+
+    #[test]
+    fn test_config_manager_shortcuts_and_views() {
+        let cfg = ConfigManager::new(PathBuf::from("/tmp/test_bubble_config.toml"));
+        assert!(!cfg.iconTheme.to_string().is_empty());
+        assert!(!cfg.theme.to_string().is_empty());
+
+        let s_map = <QVariantMap as QMetaType>::from_qvariant(cfg.shortcutMap.clone()).unwrap();
+        assert!(s_map.contains(QString::from("new_tab")));
+        assert!(s_map.contains(QString::from("copy")));
+        assert!(s_map.contains(QString::from("toggle_hidden")));
+
+        let s_defs = <QVariantList as QMetaType>::from_qvariant(cfg.shortcutDefinitions.clone()).unwrap();
+        assert!(!s_defs.is_empty());
+
+        let cols = <QVariantList as QMetaType>::from_qvariant(cfg.listColumns.clone()).unwrap();
+        assert!(!cols.is_empty());
+    }
+
+    #[test]
+    fn test_bookmark_model_operations() {
+        let mut bm = BookmarkModel::new();
+        let initial_count = bm.count;
+        assert!(initial_count >= 1);
+
+        bm.addBookmark(QString::from("/tmp"));
+        assert_eq!(bm.count, initial_count + 1);
+
+        bm.renameBookmark(initial_count, QString::from("Temp Folder"));
+        bm.removeBookmark(initial_count);
+        assert_eq!(bm.count, initial_count);
+    }
+
+    #[test]
+    fn test_file_operations_helpers() {
+        let fops = FileOperations::new();
+        assert!(fops.isArchive(QString::from("package.zip")));
+        assert!(fops.isArchive(QString::from("bundle.tar.gz")));
+        assert!(!fops.isArchive(QString::from("notes.txt")));
+
+        let name = fops.displayNameForPath(QString::from("/usr/share/bubble"));
+        assert_eq!(name.to_string(), "bubble");
+
+        let segs = fops.breadcrumbSegments(QString::from("/usr/share/bubble"));
+        let seg_list = <QVariantList as QMetaType>::from_qvariant(segs).unwrap();
+        assert!(!seg_list.is_empty());
+    }
+
+    #[test]
+    fn test_remote_access_service_uri_builder() {
+        let ras = RemoteAccessService::new();
+        let uri = ras.buildUri(
+            QString::from("sftp"),
+            QString::from("10.0.0.1"),
+            QString::from("/srv/files"),
+            QString::from("user"),
+            2222,
+            QString::default(),
+        );
+        assert_eq!(uri.to_string(), "sftp://user@10.0.0.1:2222/srv/files");
+
+        let smb_uri = ras.buildUri(
+            QString::from("smb"),
+            QString::from("nas.local"),
+            QString::from("documents"),
+            QString::from("guest"),
+            0,
+            QString::from("public"),
+        );
+        assert_eq!(smb_uri.to_string(), "smb://guest@nas.local/public/documents");
+    }
+
+    #[test]
+    fn test_rclone_service_mount_helpers() {
+        let rcs = RcloneService::new();
+        let mount_path = rcs.getMountPath(QString::from("myremote"));
+        assert!(rcs.isRclonePath(mount_path.clone()));
+        assert_eq!(rcs.getRemoteNameFromPath(mount_path).to_string(), "myremote");
+    }
+
+    #[test]
+    fn test_preview_service_loaders() {
+        let preview = PreviewService::new();
+        let hosts_path = if Path::new("/etc/hosts").exists() { "/etc/hosts" } else { "/etc/passwd" };
+        let text_prev = preview.loadTextPreview(QString::from(hosts_path), 2048, 50);
+        let map = <QVariantMap as QMetaType>::from_qvariant(text_prev).unwrap();
+        assert_eq!(map[QString::from("isBinary")].to_bool(), false);
+        let content_str = <QString as QMetaType>::from_qvariant(map[QString::from("content")].clone()).unwrap();
+        assert!(!content_str.to_string().is_empty());
+
+        let dir_prev = preview.loadDirectoryPreview(QString::from("/tmp"), 20);
+        let dir_map = <QVariantMap as QMetaType>::from_qvariant(dir_prev).unwrap();
+        assert!(dir_map.contains(QString::from("entries")));
+    }
 }
