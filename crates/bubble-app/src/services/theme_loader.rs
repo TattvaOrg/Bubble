@@ -54,6 +54,9 @@ impl ThemeLoader {
             dirs.push(config_dir.join("bubble/themes"));
             dirs.push(config_dir.join("hyprfm/themes"));
         }
+        if let Some(data_dir) = dirs::data_dir() {
+            dirs.push(data_dir.join("bubble/themes"));
+        }
         dirs.push(PathBuf::from("themes"));
         dirs.push(PathBuf::from("/usr/share/bubble/themes"));
         dirs.push(PathBuf::from("/usr/local/share/bubble/themes"));

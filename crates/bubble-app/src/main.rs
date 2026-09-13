@@ -26,11 +26,18 @@ fn print_usage() {
 }
 
 fn resolve_qml_file() -> PathBuf {
-    let candidates = [
+    let mut candidates = vec![
         PathBuf::from("src/qml/Main.qml"),
-        PathBuf::from("/usr/share/bubble/src/qml/Main.qml"),
-        PathBuf::from("/usr/local/share/bubble/src/qml/Main.qml"),
     ];
+    if let Some(data) = dirs::data_dir() {
+        candidates.push(data.join("bubble/src/qml/Main.qml"));
+        candidates.push(data.join("bubble/qml/Main.qml"));
+    }
+    candidates.push(PathBuf::from("/usr/local/share/bubble/src/qml/Main.qml"));
+    candidates.push(PathBuf::from("/usr/local/share/bubble/qml/Main.qml"));
+    candidates.push(PathBuf::from("/usr/share/bubble/src/qml/Main.qml"));
+    candidates.push(PathBuf::from("/usr/share/bubble/qml/Main.qml"));
+
     for c in candidates {
         if c.exists() {
             return c;
@@ -125,16 +132,26 @@ fn main() {
     let mut engine = QmlEngine::new();
 
     // Add import paths for QML modules (Bubble, Quill, Icons)
-    let qml_import_paths = [
-        "src/qml",
-        "src/qml/Bubble",
-        "/usr/share/bubble",
-        "/usr/share/bubble/src/qml",
-        "/usr/local/share/bubble",
-        "/usr/local/share/bubble/src/qml",
+    let mut qml_import_paths = vec![
+        "src/qml".to_string(),
+        "src/qml/Bubble".to_string(),
     ];
+    if let Some(data) = dirs::data_dir() {
+        qml_import_paths.push(data.join("bubble").to_string_lossy().to_string());
+        qml_import_paths.push(data.join("bubble/src/qml").to_string_lossy().to_string());
+        qml_import_paths.push(data.join("bubble/src/qml/Bubble").to_string_lossy().to_string());
+        qml_import_paths.push(data.join("bubble/qml").to_string_lossy().to_string());
+        qml_import_paths.push(data.join("bubble/qml/Bubble").to_string_lossy().to_string());
+    }
+    qml_import_paths.push("/usr/local/share/bubble".to_string());
+    qml_import_paths.push("/usr/local/share/bubble/src/qml".to_string());
+    qml_import_paths.push("/usr/local/share/bubble/qml".to_string());
+    qml_import_paths.push("/usr/share/bubble".to_string());
+    qml_import_paths.push("/usr/share/bubble/src/qml".to_string());
+    qml_import_paths.push("/usr/share/bubble/qml".to_string());
+
     for p in qml_import_paths {
-        engine.add_import_path(QString::from(p));
+        engine.add_import_path(QString::from(p.as_str()));
     }
 
     // Register all 29 context properties
