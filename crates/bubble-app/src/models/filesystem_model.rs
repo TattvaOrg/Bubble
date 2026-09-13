@@ -173,7 +173,50 @@ impl FileSystemModel {
         let mut files = 0;
         let mut folders = 0;
 
-        if let Ok(read_dir) = fs::read_dir(dir_path) {
+        if path_str.starts_with("trash://") {
+            let trash_items = bubble_core::trash::scan_trash();
+            for item in trash_items {
+                let meta = fs::metadata(&item.files_path).ok();
+                let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+                let path_string = item.files_path.to_string_lossy().to_string();
+                let name = item.name.clone();
+                let size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
+                let size_text = if is_dir { String::new() } else { format_file_size(size) };
+                let ext = Path::new(&name).extension().and_then(|e| e.to_str()).unwrap_or("").to_string();
+                let icon = if is_dir { "folder".to_string() } else { resolve_icon(&name, &ext) };
+                let modified_text = item.deleted_at.clone();
+
+                if is_dir { folders += 1; } else { files += 1; }
+
+                self.entries.push(FileEntry {
+                    file_name: name,
+                    file_path: path_string,
+                    file_size: size,
+                    file_size_text: size_text,
+                    file_type: if is_dir { "Folder".into() } else { ext.to_uppercase() },
+                    file_modified: 0,
+                    file_modified_text: modified_text,
+                    file_permissions: "rw-r--r--".into(),
+                    is_dir,
+                    is_symlink: false,
+                    file_icon_name: icon,
+                    git_status: String::new(),
+                    git_status_icon: String::new(),
+                    has_image_preview: false,
+                    has_video_preview: false,
+                    has_pdf_preview: false,
+                    file_owner: String::new(),
+                    file_group: String::new(),
+                    file_created_text: String::new(),
+                    file_accessed_text: String::new(),
+                    file_extension: ext,
+                    mime_type: String::new(),
+                    symlink_target: String::new(),
+                    is_locked: false,
+                    is_session_unlocked: false,
+                });
+            }
+        } else if let Ok(read_dir) = fs::read_dir(dir_path) {
             for entry_res in read_dir.flatten() {
                 let name = entry_res.file_name().to_string_lossy().to_string();
                 if !self.showHidden && name.starts_with('.') {

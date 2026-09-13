@@ -593,17 +593,26 @@ mod tests {
         engine.set_object_property("config".into(), config.pinned());
         engine.set_object_property("fsModel".into(), fs_model.pinned());
         engine.set_object_property("tabModel".into(), tab_model.pinned());
+        let file_ops = QObjectBox::new(FileOperations::new());
+        engine.set_object_property("fileOps".into(), file_ops.pinned());
 
-        engine.load_data(r#"
-            import QtQuick 2.15
-            import Bubble 1.0
+        let bookmark_model = QObjectBox::new(BookmarkModel::new());
+        engine.set_object_property("bookmarks".into(), bookmark_model.pinned());
 
-            Item {
-                Component.onCompleted: {
-                    console.log("Verified QML execution with Rust backend: theme accent is", Theme.accent);
-                }
-            }
-        "#.into());
+        engine.add_import_path(QString::from("src/qml"));
+        engine.add_import_path(QString::from("src/qml/Bubble"));
+
+        assert_eq!(file_ops.pinned().borrow().displayNameForPath(QString::from("/tmp")), QString::from("tmp"));
+        let root_segs = file_ops.pinned().borrow().breadcrumbSegments(QString::from("/"));
+        let root_list = <QVariantList as QMetaType>::from_qvariant(root_segs).expect("root segments list");
+        assert_eq!(root_list.len(), 1);
+
+        let usr_segs = file_ops.pinned().borrow().breadcrumbSegments(QString::from("/usr/share"));
+        let usr_list = <QVariantList as QMetaType>::from_qvariant(usr_segs).expect("usr segments list");
+        assert_eq!(usr_list.len(), 3);
+
+        let bm_path = bookmark_model.pinned().borrow().getPath(0);
+        assert!(!bm_path.to_string().is_empty());
 
         assert!(test_load_icon(&mut engine, "folder?theme=Adwaita"), "Folder icon must be loaded and non-null");
     }

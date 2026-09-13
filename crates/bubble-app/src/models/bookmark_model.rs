@@ -24,6 +24,8 @@ pub struct BookmarkModel {
     pub renameBookmark: qt_method!(fn(&mut self, index: i32, name: QString)),
     pub moveBookmark: qt_method!(fn(&mut self, from: i32, to: i32)),
     pub setBookmarks: qt_method!(fn(&mut self, paths: QVariant, names: QVariant)),
+    pub getPath: qt_method!(fn(&self, index: i32) -> QString),
+    pub getName: qt_method!(fn(&self, index: i32) -> QString),
 
     items: Vec<BookmarkItem>,
 }
@@ -32,12 +34,19 @@ impl BookmarkModel {
     pub fn new() -> Self {
         let mut model = Self::default();
         let home = dirs::home_dir().unwrap_or_else(|| Path::new("/").to_path_buf());
-        model.items = vec![
-            BookmarkItem { name: "Home".into(), path: home.to_string_lossy().into(), icon: "folder-home".into() },
-            BookmarkItem { name: "Documents".into(), path: home.join("Documents").to_string_lossy().into(), icon: "folder-documents".into() },
-            BookmarkItem { name: "Downloads".into(), path: home.join("Downloads").to_string_lossy().into(), icon: "folder-download".into() },
-            BookmarkItem { name: "Pictures".into(), path: home.join("Pictures").to_string_lossy().into(), icon: "folder-pictures".into() },
-        ];
+        let mut items = Vec::new();
+        items.push(BookmarkItem { name: "Home".into(), path: home.to_string_lossy().into(), icon: "folder-home".into() });
+        for folder in &["Documents", "Downloads", "Pictures", "Music", "Videos"] {
+            let p = home.join(folder);
+            if p.exists() {
+                items.push(BookmarkItem {
+                    name: folder.to_string(),
+                    path: p.to_string_lossy().into(),
+                    icon: format!("folder-{}", folder.to_lowercase()),
+                });
+            }
+        }
+        model.items = items;
         model.count = model.items.len() as i32;
         model
     }
@@ -97,7 +106,60 @@ impl BookmarkModel {
         }
     }
 
-    pub fn setBookmarks(&mut self, _paths: QVariant, _names: QVariant) {
+    pub fn setBookmarks(&mut self, paths: QVariant, names: QVariant) {
+        (self as &mut dyn QAbstractListModel).begin_reset_model();
+        self.items.clear();
+        let paths_list = <QVariantList as QMetaType>::from_qvariant(paths).unwrap_or_default();
+        let names_map = <QVariantMap as QMetaType>::from_qvariant(names).unwrap_or_default();
+        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
+        let home_str = home.to_string_lossy();
+
+        for p_var in &paths_list {
+            let mut p = <QString as QMetaType>::from_qvariant(p_var.clone()).unwrap_or_default().to_string();
+            if p.starts_with("~/") {
+                p = format!("{}{}", home_str, &p[1..]);
+            } else if p == "~" {
+                p = home_str.to_string();
+            }
+            let key = QString::from(p.as_str());
+            let custom_name = if names_map.contains(key.clone()) {
+                let v = <QString as QMetaType>::from_qvariant(names_map.value(key, QVariant::default()))
+                    .unwrap_or_default()
+                    .to_string();
+                if v.trim().is_empty() { None } else { Some(v) }
+            } else {
+                None
+            };
+            let name = custom_name.unwrap_or_else(|| {
+                Path::new(&p).file_name().and_then(|n| n.to_str()).unwrap_or(&p).to_string()
+            });
+            let icon = if p == home_str {
+                "folder-home".to_string()
+            } else {
+                format!("folder-{}", name.to_lowercase())
+            };
+            self.items.push(BookmarkItem { name, path: p, icon });
+        }
+        (self as &mut dyn QAbstractListModel).end_reset_model();
+        self.count = self.items.len() as i32;
+        self.countChanged();
+        self.bookmarksChanged();
+    }
+
+    pub fn getPath(&self, index: i32) -> QString {
+        if index >= 0 && (index as usize) < self.items.len() {
+            QString::from(self.items[index as usize].path.as_str())
+        } else {
+            QString::default()
+        }
+    }
+
+    pub fn getName(&self, index: i32) -> QString {
+        if index >= 0 && (index as usize) < self.items.len() {
+            QString::from(self.items[index as usize].name.as_str())
+        } else {
+            QString::default()
+        }
     }
 }
 

@@ -134,6 +134,9 @@ Rectangle {
                         if (model.name === "Network") return "network:///"
                         if (model.name === "Pictures") return fsModel.standardPath("pictures")
                         if (model.name === "Downloads") return fsModel.standardPath("downloads")
+                        if (model.name === "Documents") return fsModel.standardPath("documents")
+                        if (model.name === "Music") return fsModel.standardPath("music")
+                        if (model.name === "Videos") return fsModel.standardPath("videos")
                         return ""
                     }
 
@@ -531,8 +534,8 @@ Rectangle {
                         bookmarksSection.dragCurrentIndex = -1
                         isDragging = false
                     } else if (mouse.button === Qt.LeftButton && pressIndex >= 0 && pressIndex < bookmarks.count) {
-                        var path = bookmarks.data(
-                            bookmarks.index(pressIndex, 0), 258 /* PathRole */) || ""
+                        var path = (bookmarks.getPath ? bookmarks.getPath(pressIndex) : "")
+                            || bookmarks.data(bookmarks.index(pressIndex, 0), 258 /* PathRole */) || ""
                         if (path) root.bookmarkClicked(path)
                     }
                     pressIndex = -1
@@ -547,12 +550,14 @@ Rectangle {
                     if (index < 0 || index >= bookmarks.count)
                         return
 
-                    var path = bookmarks.data(bookmarks.index(index, 0), 258 /* PathRole */) || ""
+                    var path = (bookmarks.getPath ? bookmarks.getPath(index) : "")
+                        || bookmarks.data(bookmarks.index(index, 0), 258 /* PathRole */) || ""
                     var mapped = bmInteraction.mapToItem(null, mouse.x, mouse.y)
                     root.sidebarContextMenuRequested({
                         kind: "bookmark",
                         index: index,
-                        name: bookmarks.data(bookmarks.index(index, 0), 257 /* NameRole */) || "",
+                        name: (bookmarks.getName ? bookmarks.getName(index) : "")
+                            || bookmarks.data(bookmarks.index(index, 0), 257 /* NameRole */) || "",
                         path: path
                     }, Qt.point(mapped.x, mapped.y))
                 }

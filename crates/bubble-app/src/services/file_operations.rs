@@ -162,6 +162,42 @@ impl FileOperations {
             tr.insert(QString::from("label"), QString::from("Trash").to_qvariant());
             tr.insert(QString::from("fullPath"), QString::from("trash:///").to_qvariant());
             segments.push(QVariant::from(tr));
+            let remainder = p_str.trim_start_matches("trash:///").trim_start_matches("trash://");
+            let mut accumulated = "trash:///".to_string();
+            for part in remainder.split('/').filter(|s| !s.is_empty()) {
+                if !accumulated.ends_with('/') {
+                    accumulated.push('/');
+                }
+                accumulated.push_str(part);
+                let mut crumb = QVariantMap::default();
+                crumb.insert(QString::from("label"), QString::from(part).to_qvariant());
+                crumb.insert(QString::from("fullPath"), QString::from(accumulated.as_str()).to_qvariant());
+                segments.push(QVariant::from(crumb));
+            }
+            return QVariant::from(segments);
+        }
+
+        if let Some(pos) = p_str.find("://") {
+            let scheme = &p_str[..pos];
+            let remainder = &p_str[pos + 3..];
+            let mut slash_parts = remainder.split('/');
+            let authority = slash_parts.next().unwrap_or(scheme);
+            let root_url = format!("{}://{}/", scheme, authority);
+            let mut rem_root = QVariantMap::default();
+            rem_root.insert(QString::from("label"), QString::from(authority).to_qvariant());
+            rem_root.insert(QString::from("fullPath"), QString::from(root_url.as_str()).to_qvariant());
+            segments.push(QVariant::from(rem_root));
+            let mut cur = root_url;
+            for part in slash_parts.filter(|s| !s.is_empty()) {
+                if !cur.ends_with('/') {
+                    cur.push('/');
+                }
+                cur.push_str(part);
+                let mut crumb = QVariantMap::default();
+                crumb.insert(QString::from("label"), QString::from(part).to_qvariant());
+                crumb.insert(QString::from("fullPath"), QString::from(cur.as_str()).to_qvariant());
+                segments.push(QVariant::from(crumb));
+            }
             return QVariant::from(segments);
         }
 
@@ -181,6 +217,10 @@ impl FileOperations {
             let sub = &p_str[home_str.len()..];
             (home_str.clone(), sub.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>())
         } else {
+            let mut root = QVariantMap::default();
+            root.insert(QString::from("label"), QString::from("File System").to_qvariant());
+            root.insert(QString::from("fullPath"), QString::from("/").to_qvariant());
+            segments.push(QVariant::from(root));
             (String::new(), p_str.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>())
         };
 

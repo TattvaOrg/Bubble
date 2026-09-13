@@ -113,16 +113,15 @@ Item {
     height: 28
     clip: false
 
-    // Background MouseArea: right click anywhere on the bar (config-gated) or
-    // double click on empty space enters path edit mode with all text selected.
+    // Background MouseArea: clicking or double-clicking empty space enters path edit mode
     MouseArea {
         anchors.fill: parent
         visible: !root.editMode
-        z: -1
-        acceptedButtons: config.rightClickToEditPath ? Qt.LeftButton | Qt.RightButton : Qt.LeftButton
-        onPressed: (event) => {
-            if (event.button === Qt.RightButton && config.rightClickToEditPath)
-                root.startEditing()
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: (mouse) => {
+            if (mouse.button === Qt.RightButton && !config.rightClickToEditPath)
+                return
+            root.startEditing()
         }
         onDoubleClicked: (mouse) => {
             if (mouse.button === Qt.LeftButton)
@@ -138,7 +137,23 @@ Item {
         contentWidth: segmentsRow.width
         contentHeight: height
         flickableDirection: Flickable.HorizontalFlick
+        interactive: contentWidth > width
         clip: true
+
+        MouseArea {
+            anchors.fill: parent
+            z: -1
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: (mouse) => {
+                if (mouse.button === Qt.RightButton && !config.rightClickToEditPath)
+                    return
+                root.startEditing()
+            }
+            onDoubleClicked: (mouse) => {
+                if (mouse.button === Qt.LeftButton)
+                    root.startEditing()
+            }
+        }
 
         Row {
             id: segmentsRow
@@ -161,7 +176,7 @@ Item {
                 id: segmentsRepeater
                 model: {
                     if (root.isRecentsView) return [{ label: "Recents", fullPath: "" }]
-                    if (!root.path || root.path === "/") return []
+                    if (!root.path) return []
 
                     return fileOps.breadcrumbSegments(root.path)
                 }
@@ -188,14 +203,36 @@ Item {
 
                         property bool isLast: model.index === segmentsRepeater.count - 1
 
-                        HoverRect {
+                        Rectangle {
                             id: segRect
                             height: 24
                             anchors.verticalCenter: parent.verticalCenter
                             width: segLabel.width + Theme.spacing
-                            hoverEnabled: !parent.isLast
-                            onClicked: root.navigateRequested(modelData.fullPath)
-                            onDoubleClicked: root.startEditing()
+                            radius: Theme.radiusSmall
+                            color: !parent.isLast && segArea.containsMouse
+                                ? Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.1)
+                                : "transparent"
+
+                            Behavior on color { ColorAnimation { duration: Theme.animDuration } }
+
+                            MouseArea {
+                                id: segArea
+                                anchors.fill: parent
+                                hoverEnabled: !parent.parent.isLast
+                                cursorShape: !parent.parent.isLast ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                onClicked: (mouse) => {
+                                    if (mouse.button === Qt.RightButton) {
+                                        if (config.rightClickToEditPath) root.startEditing()
+                                        return
+                                    }
+                                    if (!parent.parent.isLast)
+                                        root.navigateRequested(modelData.fullPath)
+                                    else
+                                        root.startEditing()
+                                }
+                                onDoubleClicked: root.startEditing()
+                            }
 
                             Text {
                                 id: segLabel
@@ -361,7 +398,7 @@ Item {
 
         Timer {
             id: blurCloseTimer
-            interval: 0
+            interval: 150
             onTriggered: {
                 if (!pathInput.activeFocus && !suggestionsHoverArea.containsMouse) {
                     root.editMode = false
