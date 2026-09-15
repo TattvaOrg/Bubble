@@ -94,7 +94,7 @@ Rectangle {
     }
 
     implicitHeight: toolbarColumn.implicitHeight
-    color: Theme.mantle
+    color: Theme.chromeBackground
 
     DragHandler {
         enabled: root.showWindowControls && root.window
@@ -481,7 +481,7 @@ Rectangle {
 
             Rectangle {
                 anchors.fill: parent
-                color: Theme.mantle
+                color: "transparent"
                 // Top separator
                 Rectangle {
                     anchors.top: parent.top
@@ -808,7 +808,7 @@ Rectangle {
                     visible: tabStrip.contentX > 0.5
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
-                        GradientStop { position: 0; color: Theme.mantle }
+                        GradientStop { position: 0; color: Theme.chromeBackground }
                         GradientStop { position: 1; color: "transparent" }
                     }
                 }
@@ -819,7 +819,7 @@ Rectangle {
                     gradient: Gradient {
                         orientation: Gradient.Horizontal
                         GradientStop { position: 0; color: "transparent" }
-                        GradientStop { position: 1; color: Theme.mantle }
+                        GradientStop { position: 1; color: Theme.chromeBackground }
                     }
                 }
             }

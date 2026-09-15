@@ -37,7 +37,7 @@ Rectangle {
         typeFilterChanged(types.join(","))
     }
 
-    color: Theme.mantle
+    color: Theme.chromeBackground
     implicitHeight: content.implicitHeight + 16
 
     ColumnLayout {

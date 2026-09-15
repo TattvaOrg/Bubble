@@ -15,7 +15,8 @@
 [Secure Vault](#-secure-file--folder-vault) •
 [Features](#-core-features) •
 [Shortcuts](#-keyboard-shortcuts) •
-[Theming](#-theming--customization)
+[Theming](#-theming--customization) •
+[Compositor & Glass](#-compositor-integration-hyprland-niri--lniri)
 
 ---
 
@@ -188,6 +189,46 @@ error   = "#f38ba8"
 ```
 
 Switch themes inside the app via **Settings (`Ctrl+,`)** or set `theme = "my-theme"` in `~/.config/bubble/config.toml`. Changes apply immediately without restarting.
+
+---
+
+## 🪟 Compositor Integration (Hyprland, Niri & Lniri)
+
+Bubble features native support for Wayland compositor background effects including blur, contrast, and **Lniri's fluidmorphism / liquid-glass shaders** across the entire file manager window (sidebar, navigation toolbar, tabs, and file views).
+
+### Lniri (Liquid Glass & Fluidmorphism)
+
+To enable liquid glass in Lniri, add this window rule to `~/.config/niri/config.kdl`:
+
+```kdl
+window-rule {
+    match app-id="Bubble"
+    draw-border-with-background false
+    background-effect {
+        blur true
+        xray true
+        liquid-glass {
+            liquidity 0.2
+            refraction-strength 5.0
+            power-factor 3.5
+            refraction-power 1
+            glow-weight 0.1
+            edge-lighting 0.2
+            saturation 1.1
+            vibrancy 0.6
+            adaptive-dim 0.1
+            adaptive-boost 0.0
+            physical-refraction 0.1
+            lens-distortion 0.1
+            fringing 0.6
+        }
+    }
+}
+```
+
+> [!TIP]
+> - Both `match app-id="Bubble"` and `match app-id="io.github.soyeb_jim285.Bubble"` match automatically. If your environment requires a specific custom Wayland `app-id`, specify `BUBBLE_APP_ID=<your-id> bubble`.
+> - Transparency level and container transparency can be toggled and finely adjusted inside Bubble in **Settings (`Ctrl+,`)** under **Appearance**.
 
 ---
 

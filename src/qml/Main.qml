@@ -174,7 +174,7 @@ ApplicationWindow {
 
         // Bridge Bubble theme into Quill theme singleton
         Q.Theme.background = Qt.binding(() => Theme.base)
-        Q.Theme.backgroundAlt = Qt.binding(() => Theme.mantle)
+        Q.Theme.backgroundAlt = Qt.binding(() => Theme.overlayBackground)
         Q.Theme.backgroundDeep = Qt.binding(() => Theme.crust)
         Q.Theme.surface0 = Qt.binding(() => Theme.surface)
         // surface1/surface2 back Quill components that need an opaque fill
@@ -1558,7 +1558,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 title: "Rename"
                 padding: 20
-                color: Theme.mantle
+                color: Theme.overlayBackground
                 border.color: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.1)
 
                 Q.TextField {
@@ -1726,7 +1726,7 @@ ApplicationWindow {
                 anchors.fill: parent
                 title: "New Folder"
                 padding: 20
-                color: Theme.mantle
+                color: Theme.overlayBackground
                 border.color: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.1)
 
                 Q.TextField {
@@ -1891,7 +1891,7 @@ ApplicationWindow {
                 id: fileCard
                 anchors.fill: parent
                 title: "New File"
-                color: Theme.mantle
+                color: Theme.overlayBackground
                 border.color: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.1)
                 padding: 20
 
@@ -2244,7 +2244,7 @@ ApplicationWindow {
 
             Rectangle {
                 anchors.fill: parent
-                color: Theme.mantle
+                color: Theme.overlayBackground
                 radius: Theme.radiusMedium
                 border.color: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.1)
                 border.width: 1
@@ -3897,7 +3897,7 @@ ApplicationWindow {
                     y: 0
                     width: 2
                     height: toolbar.height
-                    color: Theme.mantle
+                    color: Theme.chromeBackground
                     z: 2
                 }
 
@@ -3974,19 +3974,19 @@ ApplicationWindow {
                 }
             }
 
-            // File view (semi-transparent — Hyprland compositor blurs behind this)
+            // File view (semi-transparent — Hyprland / Niri / Lniri compositor blurs and glass effects behind this)
             Rectangle {
                 id: contentArea
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: Theme.containerColor(Theme.base, 0.65)
+                color: Theme.contentBackground
 
                 // Curved mantle fills for inverse rounded corners
                 Shape {
                     z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
                     anchors.top: parent.top; anchors.left: parent.left
                     ShapePath {
-                        fillColor: Theme.mantle; strokeColor: "transparent"
+                        fillColor: Theme.chromeBackground; strokeColor: "transparent"
                         startX: 0; startY: 0
                         PathLine { x: Theme.radiusMedium; y: 0 }
                         PathArc {
@@ -4001,7 +4001,7 @@ ApplicationWindow {
                     z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
                     anchors.top: parent.top; anchors.right: parent.right
                     ShapePath {
-                        fillColor: Theme.mantle; strokeColor: "transparent"
+                        fillColor: Theme.chromeBackground; strokeColor: "transparent"
                         startX: Theme.radiusMedium; startY: 0
                         PathLine { x: 0; y: 0 }
                         PathArc {

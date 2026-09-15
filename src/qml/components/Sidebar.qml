@@ -26,7 +26,7 @@ Rectangle {
     signal collapseClicked()
     signal featureHintRequested(string message)
 
-    color: Theme.mantle
+    color: Theme.chromeBackground
     clip: false
 
     Component { id: iconHome; IconHome { size: 18; color: Theme.subtext } }
@@ -48,7 +48,7 @@ Rectangle {
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.top: parent.top; anchors.left: parent.right
         ShapePath {
-            fillColor: Theme.mantle; strokeColor: "transparent"
+            fillColor: Theme.chromeBackground; strokeColor: "transparent"
             startX: 0; startY: 0
             PathLine { x: Theme.radiusMedium; y: 0 }
             PathArc {
@@ -65,7 +65,7 @@ Rectangle {
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.bottom: parent.bottom; anchors.left: parent.right
         ShapePath {
-            fillColor: Theme.mantle; strokeColor: "transparent"
+            fillColor: Theme.chromeBackground; strokeColor: "transparent"
             startX: 0; startY: Theme.radiusMedium
             PathLine { x: Theme.radiusMedium; y: Theme.radiusMedium }
             PathArc {
