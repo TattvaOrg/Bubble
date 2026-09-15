@@ -480,7 +480,7 @@ Item {
         Rectangle {
             anchors.fill: parent
             radius: Theme.radiusLarge
-            color: Theme.crust
+            color: Theme.popupBackground
             border.color: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08)
             border.width: 1
         }
@@ -540,7 +540,7 @@ Item {
             visible: root._submenuOpensRight
 
             ShapePath {
-                fillColor: Theme.crust
+                fillColor: Theme.popupBackground
                 strokeColor: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08)
                 strokeWidth: 1
                 joinStyle: ShapePath.MiterJoin
@@ -587,7 +587,7 @@ Item {
             visible: !root._submenuOpensRight
 
             ShapePath {
-                fillColor: Theme.crust
+                fillColor: Theme.popupBackground
                 strokeColor: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08)
                 strokeWidth: 1
                 joinStyle: ShapePath.MiterJoin

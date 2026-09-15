@@ -71,7 +71,7 @@ Rectangle {
 
     visible: _showBar
     implicitHeight: _showBar ? contentCol.implicitHeight + 2 * Theme.spacing : 0
-    color: Theme.crust
+    color: Theme.popupBackground
 
     ListModel {
         id: transfersModel

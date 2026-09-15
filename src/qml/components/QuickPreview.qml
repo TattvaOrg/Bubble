@@ -505,7 +505,7 @@ Item {
         scale: 0.88
         transformOrigin: Item.Center
         radius: Theme.radiusLarge
-        color: Qt.rgba(Theme.mantle.r, Theme.mantle.g, Theme.mantle.b, 0.98)
+        color: Theme.overlayBackground
         border.width: 1
         border.color: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.12)
 

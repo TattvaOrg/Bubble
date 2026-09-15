@@ -46,7 +46,7 @@ Item {
                     implicitWidth: Math.max(240, toastRow.implicitWidth + 32)
                     implicitHeight: toastRow.implicitHeight + 20
                     radius: Theme.radiusMedium
-                    color: Theme.mantle
+                    color: Theme.overlayBackground
 
                     border.width: 2
                     border.color: toastItem.toastType === "error"   ? Theme.error

@@ -551,7 +551,7 @@ FocusScope {
             Rectangle {
                 anchors.fill: parent
                 radius: Theme.radiusLarge
-                color: Theme.crust
+                color: Theme.popupBackground
                 border.color: Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08)
                 border.width: 1
             }
@@ -637,7 +637,7 @@ FocusScope {
             z: 13
             width: root.width
             height: root.rowHeight
-            color: Theme.mantle
+            color: Theme.chromeBackground
             radius: Theme.radiusMedium
 
             // Cover the bottom corners so only the top is rounded

@@ -271,7 +271,8 @@ int main(int argc, char *argv[])
     QGuiApplication app(argc, argv);
     app.setApplicationName("Bubble");
     app.setOrganizationName("bubble");
-    app.setDesktopFileName("io.github.soyeb_jim285.Bubble");
+    const QString customAppId = qEnvironmentVariable("BUBBLE_APP_ID");
+    app.setDesktopFileName(!customAppId.isEmpty() ? customAppId : QStringLiteral("io.github.soyeb_jim285.Bubble"));
 
     // Startup timing: opt-in via BUBBLE_TIMING=1 so normal runs stay quiet.
     // Prints milliseconds from QGuiApplication construction at each phase.

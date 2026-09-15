@@ -133,4 +133,9 @@ QtObject {
         var alpha = 1 - strength * (1 - defaultAlpha)
         return Qt.rgba(color.r, color.g, color.b, alpha)
     }
+
+    readonly property color chromeBackground: containerColor(mantle, 0.75)
+    readonly property color contentBackground: containerColor(base, 0.65)
+    readonly property color overlayBackground: containerColor(mantle, 0.88)
+    readonly property color popupBackground: containerColor(crust, 0.88)
 }

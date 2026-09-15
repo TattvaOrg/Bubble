@@ -53,7 +53,7 @@ Rectangle {
     }
 
     height: 28
-    color: Theme.mantle
+    color: Theme.chromeBackground
     clip: false
 
     // Inverse rounded corner — top left
@@ -61,7 +61,7 @@ Rectangle {
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.bottom: parent.top; anchors.left: parent.left
         ShapePath {
-            fillColor: Theme.mantle; strokeColor: "transparent"
+            fillColor: Theme.chromeBackground; strokeColor: "transparent"
             startX: 0; startY: Theme.radiusMedium
             PathLine { x: Theme.radiusMedium; y: Theme.radiusMedium }
             PathArc {
@@ -78,7 +78,7 @@ Rectangle {
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.bottom: parent.top; anchors.right: parent.right
         ShapePath {
-            fillColor: Theme.mantle; strokeColor: "transparent"
+            fillColor: Theme.chromeBackground; strokeColor: "transparent"
             startX: Theme.radiusMedium; startY: Theme.radiusMedium
             PathLine { x: 0; y: Theme.radiusMedium }
             PathArc {
