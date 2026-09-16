@@ -54,9 +54,32 @@ void ThemeLoader::watchThemeFile(const QString &filePath)
     m_watcher.addPath(QFileInfo(filePath).absolutePath());
 }
 
+void ThemeLoader::resetEffects()
+{
+    m_hasEffects = false;
+    m_sidebarOpacity = 1.0;
+    m_contentOpacity = 1.0;
+    m_toolbarOpacity = 1.0;
+    m_gradientEnabled = false;
+    m_gradientColor = QColor("#000000");
+    m_gradientDirection = QStringLiteral("top_to_bottom");
+    m_glowEnabled = false;
+    m_glowColor = QColor("#ffffff");
+    m_glowRadius = 0.0;
+    m_glowOpacity = 0.0;
+    m_blurEnabled = false;
+    m_blurRadius = 0.0;
+    m_noiseEnabled = false;
+    m_noiseOpacity = 0.0;
+    m_saturation = 1.0;
+    m_refractionEnabled = false;
+    m_refractionStrength = 0.0;
+}
+
 void ThemeLoader::applyThemeFile(const QString &filePath)
 {
     m_colors = s_defaults;
+    resetEffects();
     try {
         auto config = toml::parse_file(filePath.toStdString());
         if (auto colors = config["colors"].as_table()) {
@@ -68,6 +91,55 @@ void ThemeLoader::applyThemeFile(const QString &filePath)
                         m_colors[QString::fromStdString(std::string(key))] = c;
                 }
             }
+        }
+        // Parse optional [effects] section for glass themes
+        if (auto effects = config["effects"].as_table()) {
+            m_hasEffects = true;
+
+            if (auto v = effects->get("sidebar_opacity"))
+                m_sidebarOpacity = qBound(0.0, v->value_or(1.0), 1.0);
+            if (auto v = effects->get("content_opacity"))
+                m_contentOpacity = qBound(0.0, v->value_or(1.0), 1.0);
+            if (auto v = effects->get("toolbar_opacity"))
+                m_toolbarOpacity = qBound(0.0, v->value_or(1.0), 1.0);
+
+            if (auto v = effects->get("gradient_enabled"))
+                m_gradientEnabled = v->value_or(false);
+            if (auto v = effects->get("gradient_color")) {
+                QColor c(QString::fromStdString(v->value_or(std::string("#000000"))));
+                if (c.isValid()) m_gradientColor = c;
+            }
+            if (auto v = effects->get("gradient_direction"))
+                m_gradientDirection = QString::fromStdString(v->value_or(std::string("top_to_bottom")));
+
+            if (auto v = effects->get("glow_enabled"))
+                m_glowEnabled = v->value_or(false);
+            if (auto v = effects->get("glow_color")) {
+                QColor c(QString::fromStdString(v->value_or(std::string("#ffffff"))));
+                if (c.isValid()) m_glowColor = c;
+            }
+            if (auto v = effects->get("glow_radius"))
+                m_glowRadius = qBound(0.0, v->value_or(0.0), 64.0);
+            if (auto v = effects->get("glow_opacity"))
+                m_glowOpacity = qBound(0.0, v->value_or(0.0), 1.0);
+
+            if (auto v = effects->get("blur_enabled"))
+                m_blurEnabled = v->value_or(false);
+            if (auto v = effects->get("blur_radius"))
+                m_blurRadius = qBound(0.0, v->value_or(0.0), 64.0);
+
+            if (auto v = effects->get("noise_enabled"))
+                m_noiseEnabled = v->value_or(false);
+            if (auto v = effects->get("noise_opacity"))
+                m_noiseOpacity = qBound(0.0, v->value_or(0.0), 0.2);
+
+            if (auto v = effects->get("saturation"))
+                m_saturation = qBound(0.5, v->value_or(1.0), 2.0);
+
+            if (auto v = effects->get("refraction_enabled"))
+                m_refractionEnabled = v->value_or(false);
+            if (auto v = effects->get("refraction_strength"))
+                m_refractionStrength = qBound(0.0, v->value_or(0.0), 0.1);
         }
     } catch (const toml::parse_error &err) {
         qWarning() << "Theme parse error:" << err.what();
@@ -95,6 +167,7 @@ void ThemeLoader::loadTheme(const QString &nameOrPath, const QStringList &themes
     if (filePath.isEmpty() || !QFile::exists(filePath)) {
         qWarning() << "Theme not found:" << nameOrPath;
         m_colors = s_defaults;
+        resetEffects();
         emit themeChanged();
         return;
     }

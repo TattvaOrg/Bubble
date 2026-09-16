@@ -26,7 +26,7 @@ Rectangle {
     signal collapseClicked()
     signal featureHintRequested(string message)
 
-    color: Theme.chromeBackground
+    color: Theme.sidebarBackground
     clip: false
 
     Component { id: iconHome; IconHome { size: 18; color: Theme.subtext } }
@@ -48,7 +48,7 @@ Rectangle {
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.top: parent.top; anchors.left: parent.right
         ShapePath {
-            fillColor: Theme.chromeBackground; strokeColor: "transparent"
+            fillColor: Theme.sidebarBackground; strokeColor: "transparent"
             startX: 0; startY: 0
             PathLine { x: Theme.radiusMedium; y: 0 }
             PathArc {
@@ -65,7 +65,7 @@ Rectangle {
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.bottom: parent.bottom; anchors.left: parent.right
         ShapePath {
-            fillColor: Theme.chromeBackground; strokeColor: "transparent"
+            fillColor: Theme.sidebarBackground; strokeColor: "transparent"
             startX: 0; startY: Theme.radiusMedium
             PathLine { x: Theme.radiusMedium; y: Theme.radiusMedium }
             PathArc {
@@ -75,6 +75,57 @@ Rectangle {
             }
             PathLine { x: 0; y: 0 }
         }
+    }
+
+    // ── Glass Effects (active only when theme provides [effects]) ─────
+
+    // Gradient tint overlay
+    Rectangle {
+        visible: Theme.hasEffects && Theme.gradientEnabled
+        anchors.fill: parent
+        z: 0
+        gradient: Gradient {
+            orientation: Theme.gradientDirection === "left_to_right" ? Gradient.Horizontal : Gradient.Vertical
+            GradientStop { position: 0.0; color: Qt.rgba(Theme.gradientColor.r, Theme.gradientColor.g, Theme.gradientColor.b, 0.6) }
+            GradientStop { position: 1.0; color: Qt.rgba(Theme.gradientColor.r, Theme.gradientColor.g, Theme.gradientColor.b, 0.15) }
+        }
+    }
+
+    // Noise texture overlay (frosted grain)
+    Rectangle {
+        visible: Theme.hasEffects && Theme.noiseEnabled && Theme.noiseOpacity > 0
+        anchors.fill: parent
+        z: 0
+        color: "transparent"
+        opacity: Theme.noiseOpacity
+        Canvas {
+            anchors.fill: parent
+            onPaint: {
+                var ctx = getContext("2d")
+                var w = width, h = height
+                var imgData = ctx.createImageData(w, h)
+                for (var i = 0; i < imgData.data.length; i += 4) {
+                    var v = Math.random() * 255
+                    imgData.data[i] = v
+                    imgData.data[i+1] = v
+                    imgData.data[i+2] = v
+                    imgData.data[i+3] = 25
+                }
+                ctx.putImageData(imgData, 0, 0)
+            }
+            Component.onCompleted: requestPaint()
+        }
+    }
+
+    // Border glow effect
+    Rectangle {
+        visible: Theme.hasEffects && Theme.glowEnabled && Theme.glowOpacity > 0
+        anchors.fill: parent
+        z: 0
+        color: "transparent"
+        border.width: 1
+        border.color: Qt.rgba(Theme.glowColor.r, Theme.glowColor.g, Theme.glowColor.b, Theme.glowOpacity * 0.5)
+        radius: Theme.radiusLarge
     }
 
     ColumnLayout {

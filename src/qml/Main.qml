@@ -3981,6 +3981,43 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 color: Theme.contentBackground
 
+                // ── Glass Effects (content area) ─────────────────────────
+                Rectangle {
+                    visible: Theme.hasEffects && Theme.gradientEnabled
+                    anchors.fill: parent
+                    z: 0
+                    gradient: Gradient {
+                        orientation: Gradient.Vertical
+                        GradientStop { position: 0.0; color: Qt.rgba(Theme.gradientColor.r, Theme.gradientColor.g, Theme.gradientColor.b, 0.12) }
+                        GradientStop { position: 1.0; color: "transparent" }
+                    }
+                }
+
+                Rectangle {
+                    visible: Theme.hasEffects && Theme.noiseEnabled && Theme.noiseOpacity > 0
+                    anchors.fill: parent
+                    z: 0
+                    color: "transparent"
+                    opacity: Theme.noiseOpacity * 0.5
+                    Canvas {
+                        anchors.fill: parent
+                        onPaint: {
+                            var ctx = getContext("2d")
+                            var w = width, h = height
+                            var imgData = ctx.createImageData(w, h)
+                            for (var i = 0; i < imgData.data.length; i += 4) {
+                                var v = Math.random() * 255
+                                imgData.data[i] = v
+                                imgData.data[i+1] = v
+                                imgData.data[i+2] = v
+                                imgData.data[i+3] = 20
+                            }
+                            ctx.putImageData(imgData, 0, 0)
+                        }
+                        Component.onCompleted: requestPaint()
+                    }
+                }
+
                 // Curved mantle fills for inverse rounded corners
                 Shape {
                     z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium

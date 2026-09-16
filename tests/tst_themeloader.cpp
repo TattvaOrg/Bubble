@@ -224,6 +224,74 @@ private slots:
         QVERIFY(spy.wait(5000));
         QCOMPARE(loader.color("base"), QColor("#222222"));
     }
+
+    void testLiquidDarkTheme()
+    {
+        ThemeLoader loader;
+        loader.loadTheme("liquid-dark", QStringList{QString(THEMES_DIR)});
+        QCOMPARE(loader.color("base"), QColor("#0a1628"));
+        QCOMPARE(loader.color("mantle"), QColor("#0d1f3c"));
+        QCOMPARE(loader.color("accent"), QColor("#4da6ff"));
+        QVERIFY(loader.hasEffects());
+        QCOMPARE(loader.sidebarOpacity(), 0.72);
+        QCOMPARE(loader.contentOpacity(), 0.58);
+        QCOMPARE(loader.toolbarOpacity(), 0.70);
+        QVERIFY(loader.gradientEnabled());
+        QCOMPARE(loader.gradientColor(), QColor("#0a1e3d"));
+        QCOMPARE(loader.gradientDirection(), QStringLiteral("top_to_bottom"));
+        QVERIFY(loader.glowEnabled());
+        QCOMPARE(loader.glowColor(), QColor("#3388cc"));
+        QCOMPARE(loader.glowRadius(), 16.0);
+        QCOMPARE(loader.glowOpacity(), 0.35);
+        QVERIFY(loader.blurEnabled());
+        QCOMPARE(loader.blurRadius(), 32.0);
+        QVERIFY(loader.noiseEnabled());
+        QCOMPARE(loader.noiseOpacity(), 0.04);
+        QCOMPARE(loader.saturation(), 1.15);
+        QVERIFY(loader.refractionEnabled());
+        QCOMPARE(loader.refractionStrength(), 0.02);
+    }
+
+    void testLiquidLightTheme()
+    {
+        ThemeLoader loader;
+        loader.loadTheme("liquid-light", QStringList{QString(THEMES_DIR)});
+        QCOMPARE(loader.color("base"), QColor("#eaf2fb"));
+        QCOMPARE(loader.color("accent"), QColor("#2080e0"));
+        QVERIFY(loader.hasEffects());
+        QCOMPARE(loader.sidebarOpacity(), 0.75);
+        QCOMPARE(loader.contentOpacity(), 0.62);
+        QVERIFY(loader.blurEnabled());
+    }
+
+    void testEffectsFallbackForStandardTheme()
+    {
+        ThemeLoader loader;
+        loader.loadTheme("catppuccin-mocha", QStringList{QString(THEMES_DIR)});
+        QVERIFY(!loader.hasEffects());
+        QCOMPARE(loader.sidebarOpacity(), 1.0);
+        QCOMPARE(loader.contentOpacity(), 1.0);
+        QCOMPARE(loader.toolbarOpacity(), 1.0);
+        QVERIFY(!loader.gradientEnabled());
+        QVERIFY(!loader.glowEnabled());
+        QVERIFY(!loader.blurEnabled());
+        QVERIFY(!loader.noiseEnabled());
+        QCOMPARE(loader.saturation(), 1.0);
+        QVERIFY(!loader.refractionEnabled());
+    }
+
+    void testCompositorBlurAvailableProperty()
+    {
+        ThemeLoader loader;
+        QVERIFY(!loader.compositorBlurAvailable());
+        QSignalSpy spy(&loader, &ThemeLoader::compositorBlurAvailableChanged);
+        loader.setCompositorBlurAvailable(true);
+        QVERIFY(loader.compositorBlurAvailable());
+        QCOMPARE(spy.count(), 1);
+        // Idempotent call doesn't emit signal
+        loader.setCompositorBlurAvailable(true);
+        QCOMPARE(spy.count(), 1);
+    }
 };
 
 QTEST_MAIN(TestThemeLoader)

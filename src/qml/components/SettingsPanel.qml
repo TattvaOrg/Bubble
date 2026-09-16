@@ -239,6 +239,13 @@ Window {
     function setDraftTheme(themeName) {
         draftTheme = themeName
         draftDarkMode = isDarkTheme(themeName)
+        if (themeName === "liquid-dark") {
+            draftDarkTheme = "liquid-dark"
+            draftLightTheme = "liquid-light"
+        } else if (themeName === "liquid-light") {
+            draftDarkTheme = "liquid-dark"
+            draftLightTheme = "liquid-light"
+        }
     }
 
     function bindAppearancePreview() {
@@ -659,6 +666,153 @@ Window {
                 onMoved: (value) => {
                     root.draftRadiusLarge = Math.round(value)
                     root.queueSettingsApply()
+                }
+            }
+
+            // ── Glass Effects (only visible for themes with [effects]) ──
+            Text {
+                visible: Theme.hasEffects
+                text: "Glass Effects"
+                color: Theme.accent
+                font.pointSize: Theme.fontSmall
+                font.bold: true
+                Layout.topMargin: 12
+                Layout.bottomMargin: 4
+            }
+
+            Text {
+                visible: Theme.hasEffects
+                text: "These effects are defined by the active theme. Adjust to taste."
+                color: Theme.subtext
+                font.pointSize: Theme.fontSmall
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+                Layout.bottomMargin: 4
+            }
+
+            Q.Slider {
+                visible: Theme.hasEffects
+                Layout.fillWidth: true
+                label: "Sidebar opacity"
+                from: 0
+                to: 100
+                stepSize: 1
+                showValue: true
+                value: Theme.sidebarOpacity * 100
+                onMoved: (value) => {
+                    Theme.sidebarOpacity = value / 100
+                }
+            }
+
+            Q.Slider {
+                visible: Theme.hasEffects
+                Layout.fillWidth: true
+                label: "Content opacity"
+                from: 0
+                to: 100
+                stepSize: 1
+                showValue: true
+                value: Theme.contentOpacity * 100
+                onMoved: (value) => {
+                    Theme.contentOpacity = value / 100
+                }
+            }
+
+            Q.Slider {
+                visible: Theme.hasEffects
+                Layout.fillWidth: true
+                label: "Toolbar opacity"
+                from: 0
+                to: 100
+                stepSize: 1
+                showValue: true
+                value: Theme.toolbarOpacity * 100
+                onMoved: (value) => {
+                    Theme.toolbarOpacity = value / 100
+                }
+            }
+
+            Q.Slider {
+                visible: Theme.hasEffects && Theme.blurEnabled
+                Layout.fillWidth: true
+                label: "Blur radius"
+                from: 0
+                to: 64
+                stepSize: 1
+                showValue: true
+                value: Theme.blurRadius
+                onMoved: (value) => {
+                    Theme.blurRadius = Math.round(value)
+                }
+            }
+
+            Q.Slider {
+                visible: Theme.hasEffects && Theme.glowEnabled
+                Layout.fillWidth: true
+                label: "Glow intensity"
+                from: 0
+                to: 100
+                stepSize: 1
+                showValue: true
+                value: Theme.glowOpacity * 100
+                onMoved: (value) => {
+                    Theme.glowOpacity = value / 100
+                }
+            }
+
+            Q.Slider {
+                visible: Theme.hasEffects && Theme.glowEnabled
+                Layout.fillWidth: true
+                label: "Glow radius"
+                from: 0
+                to: 64
+                stepSize: 1
+                showValue: true
+                value: Theme.glowRadius
+                onMoved: (value) => {
+                    Theme.glowRadius = Math.round(value)
+                }
+            }
+
+            Q.Slider {
+                visible: Theme.hasEffects && Theme.noiseEnabled
+                Layout.fillWidth: true
+                label: "Noise intensity"
+                from: 0
+                to: 20
+                stepSize: 1
+                showValue: true
+                value: Theme.noiseOpacity * 100
+                onMoved: (value) => {
+                    Theme.noiseOpacity = value / 100
+                }
+            }
+
+            Q.Slider {
+                visible: Theme.hasEffects
+                Layout.fillWidth: true
+                label: "Saturation"
+                from: 50
+                to: 200
+                stepSize: 5
+                showValue: true
+                value: Theme.saturation * 100
+                onMoved: (value) => {
+                    Theme.saturation = value / 100
+                }
+            }
+
+            Q.Slider {
+                visible: Theme.hasEffects && Theme.refractionEnabled
+                Layout.fillWidth: true
+                label: "Refraction strength"
+                from: 0
+                to: 10
+                stepSize: 1
+                showValue: true
+                value: Theme.refractionStrength * 100
+                onMoved: (value) => {
+                    Theme.refractionStrength = value / 100
                 }
             }
         }

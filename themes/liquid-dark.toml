@@ -1,0 +1,38 @@
+[colors]
+base    = "#0a1628"
+mantle  = "#0d1f3c"
+crust   = "#061020"
+surface = "#142a4a"
+overlay = "#1a3358"
+text    = "#e0e8f5"
+subtext = "#b0c0d8"
+muted   = "#5a7090"
+accent  = "#4da6ff"
+success = "#5ce0a0"
+warning = "#ffc04d"
+error   = "#ff6b8a"
+
+[effects]
+sidebar_opacity     = 0.72
+content_opacity     = 0.58
+toolbar_opacity     = 0.70
+
+gradient_enabled    = true
+gradient_color      = "#0a1e3d"
+gradient_direction  = "top_to_bottom"
+
+glow_enabled        = true
+glow_color          = "#3388cc"
+glow_radius         = 16.0
+glow_opacity        = 0.35
+
+blur_enabled        = true
+blur_radius         = 32.0
+
+noise_enabled       = true
+noise_opacity       = 0.04
+
+saturation          = 1.15
+
+refraction_enabled  = true
+refraction_strength = 0.02
