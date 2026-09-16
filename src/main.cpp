@@ -667,7 +667,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    auto applyWindowEffects = [config](QQuickWindow *window) {
+    auto applyWindowEffects = [config, theme](QQuickWindow *window) {
         if (!window)
             return;
 
@@ -680,8 +680,13 @@ int main(int argc, char *argv[])
 
         const bool contrastAvailable = KWindowEffects::isEffectAvailable(KWindowEffects::BackgroundContrast);
         KWindowEffects::enableBackgroundContrast(window, blurRequested && contrastAvailable);
+
+        // Expose compositor blur availability to QML so glass effects can
+        // adapt their intensity (reduce QML blur when compositor provides it).
+        theme->setCompositorBlurAvailable(blurAvailable);
 #else
         Q_UNUSED(window)
+        theme->setCompositorBlurAvailable(false);
 #endif
     };
 

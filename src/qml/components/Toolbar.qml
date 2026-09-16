@@ -96,6 +96,28 @@ Rectangle {
     implicitHeight: toolbarColumn.implicitHeight
     color: Theme.chromeBackground
 
+    // ── Glass Effects (toolbar) ──────────────────────────────────────
+    Rectangle {
+        visible: Theme.hasEffects && Theme.gradientEnabled
+        anchors.fill: parent
+        z: 0
+        gradient: Gradient {
+            orientation: Gradient.Horizontal
+            GradientStop { position: 0.0; color: Qt.rgba(Theme.gradientColor.r, Theme.gradientColor.g, Theme.gradientColor.b, 0.25) }
+            GradientStop { position: 1.0; color: "transparent" }
+        }
+    }
+
+    Rectangle {
+        visible: Theme.hasEffects && Theme.glowEnabled && Theme.glowOpacity > 0
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 1
+        z: 0
+        color: Qt.rgba(Theme.glowColor.r, Theme.glowColor.g, Theme.glowColor.b, Theme.glowOpacity * 0.3)
+    }
+
     DragHandler {
         enabled: root.showWindowControls && root.window
         target: null

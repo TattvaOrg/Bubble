@@ -64,6 +64,37 @@ QtObject {
     // of the animEasing* properties also sets easing.bezierCurve to this.
     readonly property var animBezierCurve: [0.4, 0.0, 0.2, 1.0, 1.0, 1.0]
 
+    // ── Glass Effects ──────────────────────────────────────────────────
+    // Sourced from the [effects] section in the active theme's .toml.
+    // When absent, all effects default to "off" (hasEffects = false).
+    property bool hasEffects: theme.hasEffects
+    property real sidebarOpacity: theme.sidebarOpacity
+    property real contentOpacity: theme.contentOpacity
+    property real toolbarOpacity: theme.toolbarOpacity
+    property bool gradientEnabled: theme.gradientEnabled
+    property color gradientColor: theme.gradientColor
+    property string gradientDirection: theme.gradientDirection
+    property bool glowEnabled: theme.glowEnabled
+    property color glowColor: theme.glowColor
+    property real glowRadius: theme.glowRadius
+    property real glowOpacity: theme.glowOpacity
+    property bool blurEnabled: theme.blurEnabled
+    property real blurRadius: theme.blurRadius
+    property bool noiseEnabled: theme.noiseEnabled
+    property real noiseOpacity: theme.noiseOpacity
+    property real saturation: theme.saturation
+    property bool refractionEnabled: theme.refractionEnabled
+    property real refractionStrength: theme.refractionStrength
+
+    // Whether the compositor provides blur behind the window
+    property bool compositorBlurAvailable: theme.compositorBlurAvailable
+
+    // Effective blur radius: reduced when compositor provides blur
+    readonly property real effectiveBlurRadius: {
+        if (!hasEffects || !blurEnabled) return 0
+        return compositorBlurAvailable ? Math.max(0, blurRadius * 0.3) : blurRadius
+    }
+
     Behavior on base {
         ColorAnimation { duration: root.animDurationSlow; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
     }
@@ -128,14 +159,58 @@ QtObject {
         NumberAnimation { duration: root.animDuration; easing.type: root.animEasingEnter; easing.bezierCurve: root.animBezierCurve }
     }
 
+    // Smooth transitions for glass effects
+    Behavior on sidebarOpacity {
+        NumberAnimation { duration: root.animDuration; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
+    }
+    Behavior on contentOpacity {
+        NumberAnimation { duration: root.animDuration; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
+    }
+    Behavior on toolbarOpacity {
+        NumberAnimation { duration: root.animDuration; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
+    }
+    Behavior on glowOpacity {
+        NumberAnimation { duration: root.animDuration; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
+    }
+    Behavior on blurRadius {
+        NumberAnimation { duration: root.animDuration; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
+    }
+    Behavior on noiseOpacity {
+        NumberAnimation { duration: root.animDuration; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
+    }
+    Behavior on saturation {
+        NumberAnimation { duration: root.animDuration; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
+    }
+    Behavior on gradientColor {
+        ColorAnimation { duration: root.animDurationSlow; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
+    }
+    Behavior on glowColor {
+        ColorAnimation { duration: root.animDurationSlow; easing.type: root.animEasingTransition; easing.bezierCurve: root.animBezierCurve }
+    }
+
     function containerColor(color, defaultAlpha) {
         var strength = transparencyEnabled ? transparencyLevel : 0
         var alpha = 1 - strength * (1 - defaultAlpha)
         return Qt.rgba(color.r, color.g, color.b, alpha)
     }
 
-    readonly property color chromeBackground: containerColor(mantle, 0.75)
-    readonly property color contentBackground: containerColor(base, 0.65)
+    // Glass-aware container color: uses per-zone opacity when effects active
+    function glassColor(color, zoneOpacity, fallbackAlpha) {
+        if (hasEffects && transparencyEnabled) {
+            return Qt.rgba(color.r, color.g, color.b, zoneOpacity)
+        }
+        return containerColor(color, fallbackAlpha)
+    }
+
+    readonly property color chromeBackground: hasEffects
+        ? glassColor(mantle, toolbarOpacity, 0.75)
+        : containerColor(mantle, 0.75)
+    readonly property color contentBackground: hasEffects
+        ? glassColor(base, contentOpacity, 0.65)
+        : containerColor(base, 0.65)
     readonly property color overlayBackground: containerColor(mantle, 0.88)
     readonly property color popupBackground: containerColor(crust, 0.88)
+    readonly property color sidebarBackground: hasEffects
+        ? glassColor(crust, sidebarOpacity, 0.80)
+        : containerColor(crust, 0.80)
 }
