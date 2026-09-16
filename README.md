@@ -4,7 +4,6 @@
 
 **A fast, modern Wayland file manager with Miller columns and a built-in Secure Vault.**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/TattvaOrg/Bubble?style=flat-square&color=emerald)](https://github.com/TattvaOrg/Bubble/releases)
 [![Build](https://img.shields.io/github/actions/workflow/status/TattvaOrg/Bubble/build.yml?style=flat-square)](https://github.com/TattvaOrg/Bubble/actions)
 [![Platform](https://img.shields.io/badge/Platform-Wayland%20%7C%20Hyprland-purple?style=flat-square)](https://wayland.freedesktop.org/)
