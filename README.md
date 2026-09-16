@@ -192,7 +192,7 @@ Switch themes inside the app via **Settings (`Ctrl+,`)** or set `theme = "my-the
 
 ---
 
-## 🪟 Compositor Integration (Hyprland, Niri & Lniri)
+## Compositor Integration (Lniri)
 
 Bubble features native support for Wayland compositor background effects including blur, contrast, and **Lniri's fluidmorphism / liquid-glass shaders** across the entire file manager window (sidebar, navigation toolbar, tabs, and file views).
 
