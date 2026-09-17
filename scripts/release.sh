@@ -10,7 +10,7 @@
 # What it does, in order:
 #   1. Bumps every in-tree version reference:
 #        - CMakeLists.txt   project(bubble VERSION X.Y.Z ...)
-#        - io.github.soyeb_jim285.Bubble.yml     bubble source `tag: vX.Y.Z`
+#        - io.github.tattvaorg.Bubble.yml     bubble source `tag: vX.Y.Z`
 #        - dist/*.metainfo.xml   screenshot URLs + new <release> entry
 #   2. Runs a quick cmake build as a smoke test (if build/ exists).
 #   3. Creates a "chore: release vX.Y.Z" commit on the current branch.
@@ -41,8 +41,8 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 cd "$REPO_ROOT"
 
 CMAKE_FILE="CMakeLists.txt"
-FLATPAK_FILE="io.github.soyeb_jim285.Bubble.yml"
-META_FILE="dist/io.github.soyeb_jim285.Bubble.metainfo.xml"
+FLATPAK_FILE="io.github.tattvaorg.Bubble.yml"
+META_FILE="dist/io.github.tattvaorg.Bubble.metainfo.xml"
 
 for f in "$CMAKE_FILE" "$FLATPAK_FILE" "$META_FILE"; do
     [ -f "$f" ] || { echo "release.sh: missing $f" >&2; exit 1; }

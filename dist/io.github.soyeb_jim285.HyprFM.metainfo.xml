@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>io.github.soyeb_jim285.Bubble</id>
+  <id>io.github.tattvaorg.Bubble</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
 
@@ -29,14 +29,14 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">io.github.soyeb_jim285.Bubble.desktop</launchable>
+  <launchable type="desktop-id">io.github.tattvaorg.Bubble.desktop</launchable>
 
-  <url type="homepage">https://github.com/soyeb-jim285/bubble</url>
-  <url type="bugtracker">https://github.com/soyeb-jim285/bubble/issues</url>
-  <url type="vcs-browser">https://github.com/soyeb-jim285/bubble</url>
+  <url type="homepage">https://github.com/TattvaOrg/Bubble</url>
+  <url type="bugtracker">https://github.com/TattvaOrg/Bubble/issues</url>
+  <url type="vcs-browser">https://github.com/TattvaOrg/Bubble</url>
 
-  <developer id="io.github.soyeb_jim285">
-    <name>Soyeb Pervez Jim</name>
+  <developer id="io.github.tattvaorg">
+    <name>Tattva</name>
   </developer>
 
   <screenshots>

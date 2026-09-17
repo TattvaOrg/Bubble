@@ -174,8 +174,8 @@ pushd "$ROOT_DIR" >/dev/null
 "$LINUXDEPLOY" \
     --appdir "$APPDIR" \
     --plugin qt \
-    --desktop-file "$ROOT_DIR/dist/io.github.soyeb_jim285.Bubble.desktop" \
-    --icon-file "$ROOT_DIR/dist/io.github.soyeb_jim285.Bubble.svg"
+    --desktop-file "$ROOT_DIR/dist/io.github.tattvaorg.Bubble.desktop" \
+    --icon-file "$ROOT_DIR/dist/io.github.tattvaorg.Bubble.svg"
 
 deploy_deps_args=()
 for plugin_dir in \
