@@ -6,8 +6,10 @@
 
 [![Release](https://img.shields.io/github/v/release/TattvaOrg/Bubble?style=flat-square&color=emerald)](https://github.com/TattvaOrg/Bubble/releases)
 [![Build](https://img.shields.io/github/actions/workflow/status/TattvaOrg/Bubble/build.yml?style=flat-square)](https://github.com/TattvaOrg/Bubble/actions)
-[![Platform](https://img.shields.io/badge/Platform-Wayland%20%7C%20Hyprland-purple?style=flat-square)](https://wayland.freedesktop.org/)
-
+[![GitHub Release](https://img.shields.io/github/v/release/TattvaOrg/Bubble?style=flat-square&color=blue)](https://github.com/TattvaOrg/Bubble/releases)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](http://makeapullrequest.com)
+[![Platform](https://img.shields.io/badge/Platform-Wayland-purple?style=flat-square&logo=wayland&logoColor=white)](https://wayland.freedesktop.org/)
+[![OS - Linux](https://img.shields.io/badge/OS-Linux-FCC624?style=flat-square&logo=linux&logoColor=black)](https://www.kernel.org/)
 
 [Installation](#-installation) •
 [Uninstallation](#4-uninstallation) •
