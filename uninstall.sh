@@ -226,7 +226,7 @@ for prefix in "${SCAN_PREFIXES[@]}"; do
     done
 
     # Desktop files
-    for desktop in io.github.soyeb_jim285.Bubble.desktop bubble.desktop hyprfm.desktop; do
+    for desktop in io.github.tattvaorg.Bubble.desktop io.github.soyeb_jim285.Bubble.desktop bubble.desktop hyprfm.desktop; do
         target="$prefix/share/applications/$desktop"
         if [[ -f "$target" || -L "$target" ]]; then
             if [[ $is_system -eq 1 ]]; then
@@ -239,7 +239,9 @@ for prefix in "${SCAN_PREFIXES[@]}"; do
 
     # Icons & metainfo
     for item in \
+        "share/icons/hicolor/scalable/apps/io.github.tattvaorg.Bubble.svg" \
         "share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg" \
+        "share/metainfo/io.github.tattvaorg.Bubble.metainfo.xml" \
         "share/metainfo/io.github.soyeb_jim285.Bubble.metainfo.xml" \
         "share/libalpm/hooks/bubble-cleanup.hook" \
         "share/polkit-1/actions/org.bubble.vault.policy"; do

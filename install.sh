@@ -339,9 +339,12 @@ if [[ $UNINSTALL -eq 1 ]]; then
         fi
     fi
     rm -rf "$PREFIX/share/bubble"
+    rm -f "$PREFIX/share/applications/io.github.tattvaorg.Bubble.desktop"
     rm -f "$PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
     rm -f "$PREFIX/share/applications/bubble.desktop"
+    rm -f "$PREFIX/share/icons/hicolor/scalable/apps/io.github.tattvaorg.Bubble.svg"
     rm -f "$PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
+    rm -f "$PREFIX/share/metainfo/io.github.tattvaorg.Bubble.metainfo.xml"
     rm -f "$PREFIX/share/metainfo/io.github.soyeb_jim285.Bubble.metainfo.xml"
     rm -f "$PREFIX/share/libalpm/hooks/bubble-cleanup.hook"
     rm -f "$PREFIX/share/polkit-1/actions/org.bubble.vault.policy"
@@ -538,18 +541,18 @@ install_prebuilt_binary() {
     rm -f "$PREFIX/share/applications/bubble.desktop"
 
     # Install desktop entry and icon
-    if [[ -f "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.desktop" ]]; then
-        install -m 644 "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.desktop" "$PREFIX/share/applications/"
+    if [[ -f "$SCRIPT_DIR/dist/io.github.tattvaorg.Bubble.desktop" ]]; then
+        install -m 644 "$SCRIPT_DIR/dist/io.github.tattvaorg.Bubble.desktop" "$PREFIX/share/applications/"
     elif command -v curl >/dev/null 2>&1; then
-        curl -sSL -f "https://raw.githubusercontent.com/${BUBBLE_REPO}/main/dist/io.github.soyeb_jim285.Bubble.desktop" \
-            -o "$PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop" 2>/dev/null || true
+        curl -sSL -f "https://raw.githubusercontent.com/${BUBBLE_REPO}/main/dist/io.github.tattvaorg.Bubble.desktop" \
+            -o "$PREFIX/share/applications/io.github.tattvaorg.Bubble.desktop" 2>/dev/null || true
     fi
 
-    if [[ -f "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.svg" ]]; then
-        install -m 644 "$SCRIPT_DIR/dist/io.github.soyeb_jim285.Bubble.svg" "$PREFIX/share/icons/hicolor/scalable/apps/"
+    if [[ -f "$SCRIPT_DIR/dist/io.github.tattvaorg.Bubble.svg" ]]; then
+        install -m 644 "$SCRIPT_DIR/dist/io.github.tattvaorg.Bubble.svg" "$PREFIX/share/icons/hicolor/scalable/apps/"
     elif command -v curl >/dev/null 2>&1; then
-        curl -sSL -f "https://raw.githubusercontent.com/${BUBBLE_REPO}/main/dist/io.github.soyeb_jim285.Bubble.svg" \
-            -o "$PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg" 2>/dev/null || true
+        curl -sSL -f "https://raw.githubusercontent.com/${BUBBLE_REPO}/main/dist/io.github.tattvaorg.Bubble.svg" \
+            -o "$PREFIX/share/icons/hicolor/scalable/apps/io.github.tattvaorg.Bubble.svg" 2>/dev/null || true
     fi
 
     # Extract vault helpers if present inside AppImage
@@ -590,8 +593,8 @@ install_prebuilt_binary() {
     echo "=============================================="
     echo " Mode:                Prebuilt Binary (AppImage)"
     echo " Binary installed to: $PREFIX/bin/bubble"
-    echo " Desktop file:        $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
-    echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
+    echo " Desktop file:        $PREFIX/share/applications/io.github.tattvaorg.Bubble.desktop"
+    echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.tattvaorg.Bubble.svg"
     echo
 
     if [[ "$MODE" == "user" && ":$PATH:" != *":$PREFIX/bin:"* ]]; then
@@ -858,8 +861,8 @@ echo "=============================================="
 echo " Binary installed to: $PREFIX/bin/bubble"
 echo " Vault cleanup binary: $PREFIX/bin/bubble-vault-destroy"
 echo " Vault helper binary:  $PREFIX/bin/bubble-vault-helper"
-echo " Desktop file:        $PREFIX/share/applications/io.github.soyeb_jim285.Bubble.desktop"
-echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
+echo " Desktop file:        $PREFIX/share/applications/io.github.tattvaorg.Bubble.desktop"
+echo " Icon:                $PREFIX/share/icons/hicolor/scalable/apps/io.github.tattvaorg.Bubble.svg"
 echo
 
 # Path check for user mode

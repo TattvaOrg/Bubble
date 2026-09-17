@@ -307,11 +307,11 @@ if(KF6WindowSystem_FOUND)
 endif()
 
 install(TARGETS bubble bubble-vault-destroy bubble-vault-helper DESTINATION bin)
-install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.desktop"
+install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.tattvaorg.Bubble.desktop"
     DESTINATION share/applications)
-install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.svg"
+install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.tattvaorg.Bubble.svg"
     DESTINATION share/icons/hicolor/scalable/apps)
-install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.soyeb_jim285.Bubble.metainfo.xml"
+install(FILES "${CMAKE_SOURCE_DIR}/dist/io.github.tattvaorg.Bubble.metainfo.xml"
     DESTINATION share/metainfo)
 install(FILES "${CMAKE_SOURCE_DIR}/dist/bubble-cleanup.hook"
     DESTINATION share/libalpm/hooks)

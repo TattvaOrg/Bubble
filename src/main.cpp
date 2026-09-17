@@ -236,7 +236,7 @@ int main(int argc, char *argv[])
                 "    (e.g. \"Ubuntu on Wayland\", GNOME on Wayland, Hyprland, KDE\n"
                 "    Plasma Wayland).\n"
                 "  * If running via Flatpak, also grant Wayland socket access:\n"
-                "      flatpak override --user --socket=wayland io.github.soyeb_jim285.Bubble\n"
+                "      flatpak override --user --socket=wayland io.github.tattvaorg.Bubble\n"
                 "\n",
                 session);
         return 1;
@@ -272,7 +272,7 @@ int main(int argc, char *argv[])
     app.setApplicationName("Bubble");
     app.setOrganizationName("bubble");
     const QString customAppId = qEnvironmentVariable("BUBBLE_APP_ID");
-    app.setDesktopFileName(!customAppId.isEmpty() ? customAppId : QStringLiteral("io.github.soyeb_jim285.Bubble"));
+    app.setDesktopFileName(!customAppId.isEmpty() ? customAppId : QStringLiteral("io.github.tattvaorg.Bubble"));
 
     // Startup timing: opt-in via BUBBLE_TIMING=1 so normal runs stay quiet.
     // Prints milliseconds from QGuiApplication construction at each phase.

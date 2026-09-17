@@ -89,12 +89,12 @@ package() {
     cp -r "${pkgname}/src/qml" "${pkgdir}/usr/share/bubble/src/qml"
 
     # Install desktop entry, icon and AppStream metainfo
-    install -Dm644 "${pkgname}/dist/io.github.soyeb_jim285.Bubble.desktop" \
-        "${pkgdir}/usr/share/applications/io.github.soyeb_jim285.Bubble.desktop"
-    install -Dm644 "${pkgname}/dist/io.github.soyeb_jim285.Bubble.svg" \
-        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.github.soyeb_jim285.Bubble.svg"
-    install -Dm644 "${pkgname}/dist/io.github.soyeb_jim285.Bubble.metainfo.xml" \
-        "${pkgdir}/usr/share/metainfo/io.github.soyeb_jim285.Bubble.metainfo.xml"
+    install -Dm644 "${pkgname}/dist/io.github.tattvaorg.Bubble.desktop" \
+        "${pkgdir}/usr/share/applications/io.github.tattvaorg.Bubble.desktop"
+    install -Dm644 "${pkgname}/dist/io.github.tattvaorg.Bubble.svg" \
+        "${pkgdir}/usr/share/icons/hicolor/scalable/apps/io.github.tattvaorg.Bubble.svg"
+    install -Dm644 "${pkgname}/dist/io.github.tattvaorg.Bubble.metainfo.xml" \
+        "${pkgdir}/usr/share/metainfo/io.github.tattvaorg.Bubble.metainfo.xml"
 
     # Install license
     install -Dm644 "${pkgname}/LICENSE" \

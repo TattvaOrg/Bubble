@@ -4,8 +4,8 @@
 #
 #   flatpak install -y flathub org.kde.Platform//6.9 org.kde.Sdk//6.9
 #   flatpak-builder --force-clean --user --install \
-#       build-flatpak io.github.soyeb_jim285.Bubble.yml
-#   flatpak run io.github.soyeb_jim285.Bubble
+#       build-flatpak io.github.tattvaorg.Bubble.yml
+#   flatpak run io.github.tattvaorg.Bubble
 #
 # For local iteration without committing, swap the `bubble` module's source
 # from `type: git` to `type: dir, path: .` (see comment below).
@@ -13,7 +13,7 @@
 # For Flathub submission, this file is copied to a separate flathub repo
 # and the `bubble` source must stay as `type: git` with a pinned tag/commit.
 
-app-id: io.github.soyeb_jim285.Bubble
+app-id: io.github.tattvaorg.Bubble
 runtime: org.kde.Platform
 runtime-version: '6.9'
 sdk: org.kde.Sdk
@@ -195,11 +195,11 @@ modules:
     post-install:
       # Required by Flathub: every app must install its license file to
       # $FLATPAK_DEST/share/licenses/$FLATPAK_ID.
-      - install -Dm644 LICENSE /app/share/licenses/io.github.soyeb_jim285.Bubble/LICENSE
+      - install -Dm644 LICENSE /app/share/licenses/io.github.tattvaorg.Bubble/LICENSE
     sources:
       # ── FLATHUB SUBMISSION ──
       - type: git
-        url: https://github.com/soyeb-jim285/bubble.git
+        url: https://github.com/TattvaOrg/Bubble.git
         tag: v0.6.1
 
       # ── LOCAL ITERATION ──
