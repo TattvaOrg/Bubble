@@ -1,8 +1,8 @@
 [colors]
-base    = "#eaf2fb"
+base    = "#ffffff"
 mantle  = "#dce8f5"
 crust   = "#d0dff0"
-surface = "#c4d6ec"
+surface = "#e8f1fa"
 overlay = "#b0c8e0"
 text    = "#1a2a40"
 subtext = "#2a3d5a"
@@ -13,26 +13,26 @@ warning = "#d89020"
 error   = "#d04060"
 
 [effects]
-sidebar_opacity     = 0.75
-content_opacity     = 0.62
-toolbar_opacity     = 0.72
+sidebar_opacity     = 0.0
+content_opacity     = 0.30
+toolbar_opacity     = 0.0
 
 gradient_enabled    = true
-gradient_color      = "#c8ddf5"
+gradient_color      = "#ffffff"
 gradient_direction  = "top_to_bottom"
 
 glow_enabled        = true
-glow_color          = "#80b8e8"
+glow_color          = "#ffffff"
 glow_radius         = 14.0
-glow_opacity        = 0.28
+glow_opacity        = 0.20
 
 blur_enabled        = true
 blur_radius         = 28.0
 
-noise_enabled       = true
-noise_opacity       = 0.03
+noise_enabled       = false
+noise_opacity       = 0.0
 
-saturation          = 1.10
+saturation          = 1.20
 
 refraction_enabled  = true
-refraction_strength = 0.015
+refraction_strength = 0.02

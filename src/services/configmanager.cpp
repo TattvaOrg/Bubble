@@ -225,6 +225,9 @@ ConfigManager::ConfigManager(const QString &configPath, QObject *parent, const Q
 
 QStringList ConfigManager::availableThemes() const
 {
+    if (!m_cachedThemes.isEmpty())
+        return m_cachedThemes;
+
     QStringList themes;
     for (const QString &themesDir : m_themesDirs) {
         if (themesDir.isEmpty())
@@ -239,19 +242,27 @@ QStringList ConfigManager::availableThemes() const
         }
     }
     themes.sort(Qt::CaseInsensitive);
-    return themes;
+    m_cachedThemes = themes;
+    return m_cachedThemes;
 }
 
 QStringList ConfigManager::availableFonts() const
 {
+    if (!m_cachedFonts.isEmpty())
+        return m_cachedFonts;
+
     QStringList fonts = QFontDatabase().families();
     fonts.removeDuplicates();
     fonts.sort(Qt::CaseInsensitive);
-    return fonts;
+    m_cachedFonts = fonts;
+    return m_cachedFonts;
 }
 
 QStringList ConfigManager::availableIconThemes() const
 {
+    if (!m_cachedIconThemes.isEmpty())
+        return m_cachedIconThemes;
+
     QStringList themes;
     for (const QString &baseDir : iconSearchDirs()) {
         QDir dir(baseDir);
@@ -267,7 +278,8 @@ QStringList ConfigManager::availableIconThemes() const
     }
 
     themes.sort(Qt::CaseInsensitive);
-    return themes;
+    m_cachedIconThemes = themes;
+    return m_cachedIconThemes;
 }
 
 void ConfigManager::setDefaults()
@@ -318,6 +330,7 @@ void ConfigManager::setDefaults()
 
 void ConfigManager::reload()
 {
+    m_cachedThemes.clear();
     loadConfig();
     emit configChanged();
 }

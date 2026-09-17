@@ -213,4 +213,7 @@ QtObject {
     readonly property color sidebarBackground: hasEffects
         ? glassColor(crust, sidebarOpacity, 0.80)
         : containerColor(crust, 0.80)
+    readonly property bool isFloatingGlassLayout: hasEffects && transparencyEnabled
+    readonly property bool isZeroOpacitySidebar: hasEffects && transparencyEnabled && sidebarOpacity <= 0.01
+    readonly property bool isZeroOpacityToolbar: hasEffects && transparencyEnabled && toolbarOpacity <= 0.01
 }

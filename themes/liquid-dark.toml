@@ -13,9 +13,9 @@ warning = "#ffc04d"
 error   = "#ff6b8a"
 
 [effects]
-sidebar_opacity     = 0.72
-content_opacity     = 0.58
-toolbar_opacity     = 0.70
+sidebar_opacity     = 0.0
+content_opacity     = 0.30
+toolbar_opacity     = 0.0
 
 gradient_enabled    = true
 gradient_color      = "#0a1e3d"
@@ -23,16 +23,16 @@ gradient_direction  = "top_to_bottom"
 
 glow_enabled        = true
 glow_color          = "#3388cc"
-glow_radius         = 16.0
-glow_opacity        = 0.35
+glow_radius         = 14.0
+glow_opacity        = 0.20
 
 blur_enabled        = true
-blur_radius         = 32.0
+blur_radius         = 28.0
 
-noise_enabled       = true
-noise_opacity       = 0.04
+noise_enabled       = false
+noise_opacity       = 0.0
 
-saturation          = 1.15
+saturation          = 1.20
 
 refraction_enabled  = true
 refraction_strength = 0.02

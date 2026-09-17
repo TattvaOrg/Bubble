@@ -233,21 +233,21 @@ private slots:
         QCOMPARE(loader.color("mantle"), QColor("#0d1f3c"));
         QCOMPARE(loader.color("accent"), QColor("#4da6ff"));
         QVERIFY(loader.hasEffects());
-        QCOMPARE(loader.sidebarOpacity(), 0.72);
-        QCOMPARE(loader.contentOpacity(), 0.58);
-        QCOMPARE(loader.toolbarOpacity(), 0.70);
+        QCOMPARE(loader.sidebarOpacity(), 0.0);
+        QCOMPARE(loader.contentOpacity(), 0.30);
+        QCOMPARE(loader.toolbarOpacity(), 0.0);
         QVERIFY(loader.gradientEnabled());
         QCOMPARE(loader.gradientColor(), QColor("#0a1e3d"));
         QCOMPARE(loader.gradientDirection(), QStringLiteral("top_to_bottom"));
         QVERIFY(loader.glowEnabled());
         QCOMPARE(loader.glowColor(), QColor("#3388cc"));
-        QCOMPARE(loader.glowRadius(), 16.0);
-        QCOMPARE(loader.glowOpacity(), 0.35);
+        QCOMPARE(loader.glowRadius(), 14.0);
+        QCOMPARE(loader.glowOpacity(), 0.20);
         QVERIFY(loader.blurEnabled());
-        QCOMPARE(loader.blurRadius(), 32.0);
-        QVERIFY(loader.noiseEnabled());
-        QCOMPARE(loader.noiseOpacity(), 0.04);
-        QCOMPARE(loader.saturation(), 1.15);
+        QCOMPARE(loader.blurRadius(), 28.0);
+        QVERIFY(!loader.noiseEnabled());
+        QCOMPARE(loader.noiseOpacity(), 0.0);
+        QCOMPARE(loader.saturation(), 1.20);
         QVERIFY(loader.refractionEnabled());
         QCOMPARE(loader.refractionStrength(), 0.02);
     }
@@ -256,11 +256,11 @@ private slots:
     {
         ThemeLoader loader;
         loader.loadTheme("liquid-light", QStringList{QString(THEMES_DIR)});
-        QCOMPARE(loader.color("base"), QColor("#eaf2fb"));
+        QCOMPARE(loader.color("base"), QColor("#ffffff"));
         QCOMPARE(loader.color("accent"), QColor("#2080e0"));
         QVERIFY(loader.hasEffects());
-        QCOMPARE(loader.sidebarOpacity(), 0.75);
-        QCOMPARE(loader.contentOpacity(), 0.62);
+        QCOMPARE(loader.sidebarOpacity(), 0.0);
+        QCOMPARE(loader.contentOpacity(), 0.30);
         QVERIFY(loader.blurEnabled());
     }
 

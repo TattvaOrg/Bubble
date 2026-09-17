@@ -43,8 +43,9 @@ Rectangle {
     Component { id: iconFolder; IconFolder { size: 18; color: Theme.subtext } }
     Component { id: iconMonitor; IconMonitor { size: 18; color: Theme.subtext } }
 
-    // Inverse rounded corner — top right
+    // Inverse rounded corner — top right (only for flush classic layout)
     Shape {
+        visible: !Theme.isFloatingGlassLayout && !Theme.isZeroOpacitySidebar
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.top: parent.top; anchors.left: parent.right
         ShapePath {
@@ -60,8 +61,9 @@ Rectangle {
         }
     }
 
-    // Inverse rounded corner — bottom right
+    // Inverse rounded corner — bottom right (only for flush classic layout)
     Shape {
+        visible: !Theme.isFloatingGlassLayout && !Theme.isZeroOpacitySidebar
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.bottom: parent.bottom; anchors.left: parent.right
         ShapePath {
@@ -81,7 +83,7 @@ Rectangle {
 
     // Gradient tint overlay
     Rectangle {
-        visible: Theme.hasEffects && Theme.gradientEnabled
+        visible: Theme.hasEffects && Theme.gradientEnabled && !Theme.isZeroOpacitySidebar
         anchors.fill: parent
         z: 0
         gradient: Gradient {
@@ -93,7 +95,7 @@ Rectangle {
 
     // Noise texture overlay (frosted grain)
     Rectangle {
-        visible: Theme.hasEffects && Theme.noiseEnabled && Theme.noiseOpacity > 0
+        visible: Theme.hasEffects && Theme.noiseEnabled && Theme.noiseOpacity > 0 && !Theme.isZeroOpacitySidebar
         anchors.fill: parent
         z: 0
         color: "transparent"
@@ -119,7 +121,7 @@ Rectangle {
 
     // Border glow effect
     Rectangle {
-        visible: Theme.hasEffects && Theme.glowEnabled && Theme.glowOpacity > 0
+        visible: Theme.hasEffects && Theme.glowEnabled && Theme.glowOpacity > 0 && !Theme.isZeroOpacitySidebar
         anchors.fill: parent
         z: 0
         color: "transparent"

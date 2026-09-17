@@ -53,11 +53,12 @@ Rectangle {
     }
 
     height: 28
-    color: Theme.chromeBackground
+    color: Theme.isFloatingGlassLayout ? "transparent" : Theme.chromeBackground
     clip: false
 
-    // Inverse rounded corner — top left
+    // Inverse rounded corner — top left (only for flush classic layout)
     Shape {
+        visible: !Theme.isFloatingGlassLayout && !Theme.isZeroOpacityToolbar
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.bottom: parent.top; anchors.left: parent.left
         ShapePath {
@@ -73,8 +74,9 @@ Rectangle {
         }
     }
 
-    // Inverse rounded corner — top right
+    // Inverse rounded corner — top right (only for flush classic layout)
     Shape {
+        visible: !Theme.isFloatingGlassLayout && !Theme.isZeroOpacityToolbar
         z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
         anchors.bottom: parent.top; anchors.right: parent.right
         ShapePath {
