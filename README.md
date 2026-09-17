@@ -272,3 +272,7 @@ Contributions, bug reports, and suggestions are welcome!
 3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+## Credit
+
+- Thank Soyeb-jim for his [hyperfm](https://github.com/soyeb-jim285/hyprfm) , because as a base we use hyprefm's cpp core and ui to build a bubble on it. 
