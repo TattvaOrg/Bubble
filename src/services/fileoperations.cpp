@@ -2913,6 +2913,9 @@ void FileOperations::setWallpaper(const QString &path)
 
 void FileOperations::setHyprlandRounding(const QString &windowTitle, int radius)
 {
+    if (qEnvironmentVariableIsEmpty("HYPRLAND_INSTANCE_SIGNATURE"))
+        return;
+
     auto *proc = new QProcess(this);
     connect(proc, qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
             this, [proc](int, QProcess::ExitStatus) { proc->deleteLater(); });
@@ -2925,6 +2928,9 @@ void FileOperations::setHyprlandRounding(const QString &windowTitle, int radius)
 
 void FileOperations::setHyprlandBorder(const QString &windowTitle, int size)
 {
+    if (qEnvironmentVariableIsEmpty("HYPRLAND_INSTANCE_SIGNATURE"))
+        return;
+
     auto *proc = new QProcess(this);
     connect(proc, qOverload<int, QProcess::ExitStatus>(&QProcess::finished),
             this, [proc](int, QProcess::ExitStatus) { proc->deleteLater(); });

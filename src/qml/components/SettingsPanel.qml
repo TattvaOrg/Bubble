@@ -308,17 +308,35 @@ Window {
         try {
             draftTheme = config.theme
             draftDarkMode = isDarkTheme(draftTheme)
-            themeOptions = buildOptions(availableThemeValues, draftTheme, "catppuccin-mocha")
+            if (themeOptions.length === 0) {
+                themeOptions = buildOptions(availableThemeValues, draftTheme, "catppuccin-mocha")
+                lightThemeOptions = buildOptions(availableThemeValues, draftLightTheme, "catppuccin-latte")
+                darkThemeOptions = buildOptions(availableThemeValues, draftDarkTheme, "catppuccin-mocha")
+            } else if (draftTheme !== "" && themeOptions.indexOf(draftTheme) === -1) {
+                var topts = themeOptions.slice()
+                topts.unshift(draftTheme)
+                themeOptions = topts
+            }
             draftLightTheme = config.lightTheme
             draftDarkTheme = config.darkTheme
-            lightThemeOptions = buildOptions(availableThemeValues, draftLightTheme, "catppuccin-latte")
-            darkThemeOptions = buildOptions(availableThemeValues, draftDarkTheme, "catppuccin-mocha")
 
             draftFontFamily = config.fontFamily
-            fontOptions = buildFontOptions()
+            if (fontOptions.length <= 1) {
+                fontOptions = buildFontOptions()
+            } else if (draftFontFamily !== "" && fontOptions.indexOf(draftFontFamily) === -1) {
+                var fopts = fontOptions.slice()
+                fopts.push(draftFontFamily)
+                fontOptions = fopts
+            }
 
             draftIconTheme = config.iconTheme
-            iconThemeOptions = buildOptions(availableIconThemeValues, draftIconTheme, "Adwaita")
+            if (iconThemeOptions.length === 0) {
+                iconThemeOptions = buildOptions(availableIconThemeValues, draftIconTheme, "Adwaita")
+            } else if (draftIconTheme !== "" && iconThemeOptions.indexOf(draftIconTheme) === -1) {
+                var iopts = iconThemeOptions.slice()
+                iopts.unshift(draftIconTheme)
+                iconThemeOptions = iopts
+            }
 
             draftShowHidden = currentShowHidden
             draftRightClickToEditPath = config.rightClickToEditPath
@@ -352,8 +370,6 @@ Window {
     }
 
     function openPanel() {
-        syncFromCurrentState()
-        showSection(0)
         // Center over the parent window
         if (transientParent) {
             root.x = transientParent.x + Math.round((transientParent.width - root.width) / 2)
@@ -362,6 +378,8 @@ Window {
         root.show()
         root.raise()
         root.requestActivate()
+        syncFromCurrentState()
+        showSection(0)
         root.syncHyprlandRounding()
     }
 

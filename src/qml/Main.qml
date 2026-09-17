@@ -531,6 +531,11 @@ ApplicationWindow {
     }
 
     function scheduleActivePaneFocus() {
+        if (root.shouldFocusActivePane()) {
+            var immediateView = root.activeSubView()
+            if (immediateView)
+                immediateView.forceActiveFocus()
+        }
         if (paneFocusScheduled)
             return
 
@@ -3892,7 +3897,7 @@ ApplicationWindow {
                 Layout.fillHeight: true
 
                 Rectangle {
-                    visible: root.sidebarVisible
+                    visible: root.sidebarVisible && !Theme.isFloatingGlassLayout
                     x: config.sidebarPosition === "right" ? parent.width - 1 : -1
                     y: 0
                     width: 2
@@ -3979,12 +3984,23 @@ ApplicationWindow {
                 id: contentArea
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: Theme.contentBackground
+                Layout.topMargin: Theme.isFloatingGlassLayout ? 4 : 0
+                Layout.bottomMargin: Theme.isFloatingGlassLayout ? 6 : 0
+                Layout.leftMargin: Theme.isFloatingGlassLayout ? (config.sidebarPosition === "right" ? 10 : (root.sidebarVisible ? 6 : 10)) : 0
+                Layout.rightMargin: Theme.isFloatingGlassLayout ? (config.sidebarPosition === "right" ? (root.sidebarVisible ? 6 : 10) : 10) : 0
+                radius: Theme.isFloatingGlassLayout ? (root.splitViewPresented ? 0 : Theme.radiusLarge) : 0
+                clip: Theme.isFloatingGlassLayout ? !root.splitViewPresented : false
+                color: Theme.isFloatingGlassLayout
+                    ? (root.splitViewPresented ? "transparent" : Theme.contentBackground)
+                    : Theme.contentBackground
+                border.width: Theme.isFloatingGlassLayout && !root.splitViewPresented ? 1 : 0
+                border.color: Qt.rgba(Theme.glowColor.r, Theme.glowColor.g, Theme.glowColor.b, 0.22)
 
                 // ── Glass Effects (content area) ─────────────────────────
                 Rectangle {
-                    visible: Theme.hasEffects && Theme.gradientEnabled
+                    visible: Theme.hasEffects && Theme.gradientEnabled && (!Theme.isFloatingGlassLayout || !root.splitViewPresented)
                     anchors.fill: parent
+                    radius: parent.radius
                     z: 0
                     gradient: Gradient {
                         orientation: Gradient.Vertical
@@ -3996,6 +4012,7 @@ ApplicationWindow {
                 Rectangle {
                     visible: Theme.hasEffects && Theme.noiseEnabled && Theme.noiseOpacity > 0
                     anchors.fill: parent
+                    radius: parent.radius
                     z: 0
                     color: "transparent"
                     opacity: Theme.noiseOpacity * 0.5
@@ -4018,8 +4035,9 @@ ApplicationWindow {
                     }
                 }
 
-                // Curved mantle fills for inverse rounded corners
+                // Curved mantle fills for inverse rounded corners (only for flush classic layout)
                 Shape {
+                    visible: !Theme.isFloatingGlassLayout && !Theme.isZeroOpacityToolbar
                     z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
                     anchors.top: parent.top; anchors.left: parent.left
                     ShapePath {
@@ -4035,6 +4053,7 @@ ApplicationWindow {
                     }
                 }
                 Shape {
+                    visible: !Theme.isFloatingGlassLayout && !Theme.isZeroOpacityToolbar
                     z: 1; width: Theme.radiusMedium; height: Theme.radiusMedium
                     anchors.top: parent.top; anchors.right: parent.right
                     ShapePath {
@@ -4053,10 +4072,10 @@ ApplicationWindow {
                 RowLayout {
                     id: paneRow
                     anchors.fill: parent
-                    anchors.margins: 8 * root.splitTransitionProgress
+                    anchors.margins: root.splitViewPresented ? (Theme.isFloatingGlassLayout ? 0 : 8 * root.splitTransitionProgress) : 0
                     spacing: 8 * root.splitTransitionProgress
 
-                    readonly property real dividerWidth: root.splitTransitionProgress
+                    readonly property real dividerWidth: Theme.isFloatingGlassLayout ? 0 : root.splitTransitionProgress
                     readonly property real secondaryPreferredWidth: Math.max(
                         0,
                         (width - spacing - dividerWidth) * 0.5 * root.splitTransitionProgress
@@ -4066,12 +4085,16 @@ ApplicationWindow {
                         id: primaryPaneFrame
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        radius: Theme.radiusMedium * root.splitTransitionProgress
+                        radius: Theme.isFloatingGlassLayout
+                            ? (root.splitViewPresented ? Theme.radiusLarge : 0)
+                            : Theme.radiusMedium * root.splitTransitionProgress
                         clip: true
                         // Fill stays opaque the entire time so the pane never
                         // flashes transparent at progress ≈ 0 during close.
                         // Only the split-specific border tint fades.
-                        color: Theme.containerColor(Theme.crust, 0.14)
+                        color: root.splitViewPresented
+                            ? (Theme.isFloatingGlassLayout ? Theme.contentBackground : Theme.containerColor(Theme.crust, 0.14))
+                            : (Theme.isFloatingGlassLayout ? "transparent" : Theme.containerColor(Theme.crust, 0.14))
 
                         ColumnLayout {
                             anchors.fill: parent
@@ -4228,17 +4251,21 @@ ApplicationWindow {
                             z: 10
                             color: "transparent"
                             radius: primaryPaneFrame.radius
-                            border.width: root.splitTransitionProgress
+                            border.width: Theme.isFloatingGlassLayout
+                                ? (root.splitViewPresented ? 1 : 0)
+                                : root.splitTransitionProgress
                             border.color: root.activePane === "primary"
-                                ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45 * root.splitTransitionProgress)
-                                : Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08 * root.splitTransitionProgress)
+                                ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45 * (Theme.isFloatingGlassLayout ? 1.0 : root.splitTransitionProgress))
+                                : (Theme.isFloatingGlassLayout
+                                    ? Qt.rgba(Theme.glowColor.r, Theme.glowColor.g, Theme.glowColor.b, 0.22)
+                                    : Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08 * root.splitTransitionProgress))
                             Behavior on border.color { ColorAnimation { duration: Theme.animDuration } }
                         }
                     }
 
                     Loader {
                         id: dividerLoader
-                        active: root.splitViewPresented
+                        active: root.splitViewPresented && !Theme.isFloatingGlassLayout
                         visible: active
                         Layout.preferredWidth: paneRow.dividerWidth
                         Layout.fillHeight: true
@@ -4265,9 +4292,9 @@ ApplicationWindow {
                             opacity: root.splitTransitionProgress
                             scale: 0.96 + (0.04 * root.splitTransitionProgress)
                             transformOrigin: Item.Right
-                            radius: Theme.radiusMedium
+                            radius: Theme.isFloatingGlassLayout ? Theme.radiusLarge : Theme.radiusMedium
                             clip: true
-                            color: Theme.containerColor(Theme.crust, 0.14)
+                            color: Theme.isFloatingGlassLayout ? Theme.contentBackground : Theme.containerColor(Theme.crust, 0.14)
 
                             ColumnLayout {
                                 anchors.fill: parent
@@ -4313,7 +4340,9 @@ ApplicationWindow {
                                 border.width: 1
                                 border.color: root.activePane === "secondary"
                                     ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.45)
-                                    : Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08)
+                                    : (Theme.isFloatingGlassLayout
+                                        ? Qt.rgba(Theme.glowColor.r, Theme.glowColor.g, Theme.glowColor.b, 0.22)
+                                        : Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.08))
                                 Behavior on border.color { ColorAnimation { duration: Theme.animDuration } }
                             }
                         }

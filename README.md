@@ -201,25 +201,39 @@ To enable liquid glass in Lniri, add this window rule to `~/.config/niri/config.
 
 ```kdl
 window-rule {
+    match app-id="io.github.soyeb_jim285.Bubble"
+    match app-id="bubble"
     match app-id="Bubble"
+
+    open-floating true
+    default-column-width { proportion 0.72; }
+    default-window-height { proportion 0.78; }
+
     draw-border-with-background false
+    geometry-corner-radius 14
+    clip-to-geometry true
+
     background-effect {
         blur true
         xray true
         liquid-glass {
-            liquidity 0.2
-            refraction-strength 5.0
-            power-factor 3.5
-            refraction-power 1
-            glow-weight 0.1
-            edge-lighting 0.2
-            saturation 1.1
-            vibrancy 0.6
-            adaptive-dim 0.1
-            adaptive-boost 0.0
-            physical-refraction 0.1
-            lens-distortion 0.1
-            fringing 0.6
+            mode "kwin-glass"
+            liquidity 0.6
+            refraction-strength 4.5
+            power-factor 3.2
+            refraction-bevel-intensity 10.0
+            refraction-offset-strength 8.0
+            edge-thickness 0.18
+            fringing 0.45
+            glow-weight 0.015
+            edge-lighting 0.20
+            oklab-saturation 1.0
+            saturation 1.20
+            vibrancy 0.45
+            adaptive-dim 0.0
+            adaptive-boost 0.20
+            physical-refraction 1.0
+            lens-distortion 0.20
         }
     }
 }

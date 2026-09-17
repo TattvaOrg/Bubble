@@ -219,4 +219,7 @@ private:
     QString m_configError;
     QMap<QString, QString> m_shortcuts;
     static QMap<QString, QString> s_defaultShortcuts;
+    mutable QStringList m_cachedFonts;
+    mutable QStringList m_cachedIconThemes;
+    mutable QStringList m_cachedThemes;
 };

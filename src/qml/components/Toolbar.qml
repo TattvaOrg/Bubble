@@ -98,7 +98,7 @@ Rectangle {
 
     // ── Glass Effects (toolbar) ──────────────────────────────────────
     Rectangle {
-        visible: Theme.hasEffects && Theme.gradientEnabled
+        visible: Theme.hasEffects && Theme.gradientEnabled && !Theme.isZeroOpacityToolbar
         anchors.fill: parent
         z: 0
         gradient: Gradient {
@@ -109,7 +109,7 @@ Rectangle {
     }
 
     Rectangle {
-        visible: Theme.hasEffects && Theme.glowEnabled && Theme.glowOpacity > 0
+        visible: Theme.hasEffects && Theme.glowEnabled && Theme.glowOpacity > 0 && !Theme.isZeroOpacityToolbar
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
