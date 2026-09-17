@@ -17,6 +17,8 @@
 [Theming](#-theming--customization) •
 [Compositor & Glass](#-compositor-integration-hyprland-niri--lniri)
 
+<img src="docs/screenshots/bubble.png">
+
 ---
 
 </div>
