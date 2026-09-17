@@ -119,7 +119,7 @@ Bubble includes a built-in cryptographic vault that lets you lock sensitive file
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## Keyboard Shortcuts
 
 Bubble is designed for efficient keyboard-first navigation:
 
@@ -260,6 +260,102 @@ Bubble is architected into three distinct layers:
    - `CryptoEngine` & `VaultService`: AES-256-GCM authenticated encryption and session auto-locking.
    - `GioTransferWorker`: Asynchronous non-blocking file streaming via GIO.
    - `ThumbnailProvider`: Off-thread caching thumbnail generators for media and documents.
+
+```mermaid
+flowchart TD
+
+subgraph group_ui["QML UI"]
+  node_startup{{"Native startup &amp; registration<br/>Qt C++ entrypoint<br/>[main.cpp]"}}
+  node_shell["Application shell<br/>QML window coordinator<br/>[Main.qml]"]
+  node_file_views["File presentation modes<br/>QML view selector"]
+end
+
+subgraph group_models["State Models"]
+  node_file_state["Filesystem &amp; tab state<br/>QAbstractItemModels"]
+  node_sidebar_models["Sidebar sources<br/>QAbstractItemModels<br/>[bookmarkmodel.cpp]"]
+  node_search_models["Search result models<br/>QAbstractItemModels"]
+end
+
+subgraph group_operations["File Operations"]
+  node_file_operations["File operations<br/>[fileoperations.cpp]"]
+  node_transfer_worker["Async GIO transfers<br/>worker"]
+  node_clipboard_undo_trash["Clipboard, undo &amp; trash<br/>operation services"]
+end
+
+subgraph group_enrichment["Content &amp; Search"]
+  node_preview_service["Preview orchestration<br/>[previewservice.cpp]"]
+  node_preview_providers["Thumbnail &amp; PDF providers<br/>content providers"]
+  node_metadata_git["Metadata &amp; Git status<br/>enrichment services"]
+  node_search_service["Search execution<br/>[searchservice.cpp]"]
+end
+
+subgraph group_platform["Platform &amp; Security"]
+  node_vault_pipeline["Vault encryption pipeline<br/>security services<br/>[vaultservice.cpp]"]
+  node_vault_storage[("Vault persistence &amp; helpers<br/>database and executables<br/>[vaultdatabase.cpp]")]
+  node_external_access["Devices &amp; remote mounts<br/>platform integration<br/>[devicemodel.cpp]"]
+  node_app_state["Preferences, session &amp; theme<br/>application services<br/>[configmanager.cpp]"]
+end
+
+subgraph group_build["Build &amp; Distribution"]
+  node_cmake["CMake build topology<br/>[CMakeLists.txt]"]
+  node_src_cmake["Application build<br/>CMake target<br/>[CMakeLists.txt]"]
+end
+
+node_cmake -->|"includes"| node_src_cmake
+node_src_cmake -->|"builds"| node_startup
+node_startup -->|"registers and launches"| node_shell
+node_shell -->|"selects"| node_file_views
+node_shell -->|"binds navigation"| node_file_state
+node_shell -->|"binds sidebar"| node_sidebar_models
+node_shell -->|"displays"| node_search_models
+node_shell -->|"requests actions"| node_file_operations
+node_shell -->|"requests previews"| node_preview_service
+node_shell -->|"submits queries"| node_search_service
+node_shell -->|"manages vaults"| node_vault_pipeline
+node_shell -->|"uses"| node_app_state
+node_file_operations -->|"dispatches transfers"| node_transfer_worker
+node_file_operations -->|"coordinates recovery"| node_clipboard_undo_trash
+node_preview_service -->|"delegates rendering"| node_preview_providers
+node_file_state -.->|"enriches entries"| node_metadata_git
+node_search_service -->|"feeds results"| node_search_models
+node_vault_pipeline -->|"persists and invokes"| node_vault_storage
+node_sidebar_models -->|"mounts devices"| node_external_access
+node_file_state -.->|"browses mounted sources"| node_external_access
+
+click node_cmake "https://github.com/tattvaorg/bubble/blob/main/CMakeLists.txt"
+click node_src_cmake "https://github.com/tattvaorg/bubble/blob/main/src/CMakeLists.txt"
+click node_startup "https://github.com/tattvaorg/bubble/blob/main/src/main.cpp"
+click node_shell "https://github.com/tattvaorg/bubble/blob/main/src/qml/Main.qml"
+click node_file_views "https://github.com/tattvaorg/bubble/blob/main/src/qml/views/FileViewContainer.qml"
+click node_file_state "https://github.com/tattvaorg/bubble/blob/main/src/models/filesystemmodel.cpp"
+click node_sidebar_models "https://github.com/tattvaorg/bubble/blob/main/src/models/bookmarkmodel.cpp"
+click node_search_models "https://github.com/tattvaorg/bubble/blob/main/src/models/searchresultsmodel.cpp"
+click node_file_operations "https://github.com/tattvaorg/bubble/blob/main/src/services/fileoperations.cpp"
+click node_transfer_worker "https://github.com/tattvaorg/bubble/blob/main/src/services/giotransferworker.cpp"
+click node_clipboard_undo_trash "https://github.com/tattvaorg/bubble/blob/main/src/services/clipboardmanager.cpp"
+click node_preview_service "https://github.com/tattvaorg/bubble/blob/main/src/services/previewservice.cpp"
+click node_preview_providers "https://github.com/tattvaorg/bubble/blob/main/src/providers/thumbnailprovider.cpp"
+click node_metadata_git "https://github.com/tattvaorg/bubble/blob/main/src/services/metadataextractor.cpp"
+click node_search_service "https://github.com/tattvaorg/bubble/blob/main/src/services/searchservice.cpp"
+click node_vault_pipeline "https://github.com/tattvaorg/bubble/blob/main/src/services/vaultservice.cpp"
+click node_vault_storage "https://github.com/tattvaorg/bubble/blob/main/src/services/vaultdatabase.cpp"
+click node_external_access "https://github.com/tattvaorg/bubble/blob/main/src/models/devicemodel.cpp"
+click node_app_state "https://github.com/tattvaorg/bubble/blob/main/src/services/configmanager.cpp"
+
+classDef toneNeutral fill:#f8fafc,stroke:#334155,stroke-width:1.5px,color:#0f172a
+classDef toneBlue fill:#dbeafe,stroke:#2563eb,stroke-width:1.5px,color:#172554
+classDef toneAmber fill:#fef3c7,stroke:#d97706,stroke-width:1.5px,color:#78350f
+classDef toneMint fill:#dcfce7,stroke:#16a34a,stroke-width:1.5px,color:#14532d
+classDef toneRose fill:#ffe4e6,stroke:#e11d48,stroke-width:1.5px,color:#881337
+classDef toneIndigo fill:#e0e7ff,stroke:#4f46e5,stroke-width:1.5px,color:#312e81
+classDef toneTeal fill:#ccfbf1,stroke:#0f766e,stroke-width:1.5px,color:#134e4a
+class node_startup,node_shell,node_file_views toneBlue
+class node_file_state,node_sidebar_models,node_search_models toneAmber
+class node_file_operations,node_transfer_worker,node_clipboard_undo_trash toneMint
+class node_preview_service,node_preview_providers,node_metadata_git,node_search_service toneRose
+class node_vault_pipeline,node_vault_storage,node_external_access,node_app_state toneIndigo
+class node_cmake,node_src_cmake toneTeal
+```
 
 ---
 
