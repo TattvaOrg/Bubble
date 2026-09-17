@@ -50,13 +50,13 @@ jobs:
 
           flatpak_tag=$(python3 -c '
           import re
-          t = open("io.github.tattvaorg.Bubble.yml").read()
-          m = re.search(r"url:\s*https://github\.com/TattvaOrg/Bubble\.git\s*\n(?:[^\n]*\n)*?\s*tag:\s*(v\d+\.\d+\.\d+)", t)
+          t = open("io.github.soyeb_jim285.Bubble.yml").read()
+          m = re.search(r"url:\s*https://github\.com/soyeb-jim285/bubble\.git\s*\n(?:[^\n]*\n)*?\s*tag:\s*(v\d+\.\d+\.\d+)", t)
           print(m.group(1) if m else "")
           ')
           check "flatpak manifest bubble tag" "$TAG" "$flatpak_tag"
 
-          if grep -q "<release version=\"$VERSION\"" dist/io.github.tattvaorg.Bubble.metainfo.xml; then
+          if grep -q "<release version=\"$VERSION\"" dist/io.github.soyeb_jim285.Bubble.metainfo.xml; then
             echo "OK   metainfo.xml <release> entry present"
           else
             echo "::error::metainfo.xml is missing a <release version=\"$VERSION\"> entry"
@@ -195,8 +195,8 @@ jobs:
           ./linuxdeploy-x86_64.AppImage \
             --appdir AppDir \
             --plugin qt \
-            --desktop-file dist/io.github.tattvaorg.Bubble.desktop \
-            --icon-file dist/io.github.tattvaorg.Bubble.svg
+            --desktop-file dist/io.github.soyeb_jim285.Bubble.desktop \
+            --icon-file dist/io.github.soyeb_jim285.Bubble.svg
 
           deploy_deps_args=()
           for plugin_dir in \
@@ -350,7 +350,7 @@ jobs:
             --gpg-sign="$GPG_FINGERPRINT" \
             --default-branch=stable \
             flatpak-build \
-            io.github.tattvaorg.Bubble.yml
+            io.github.soyeb_jim285.Bubble.yml
           flatpak build-update-repo \
             --generate-static-deltas \
             --gpg-sign="$GPG_FINGERPRINT" \
@@ -365,7 +365,7 @@ jobs:
         run: |
           flatpak build-bundle flatpak-repo \
             "Bubble-${TAG_NAME}-x86_64.flatpak" \
-            io.github.tattvaorg.Bubble stable \
+            io.github.soyeb_jim285.Bubble stable \
             --gpg-sign="$GPG_FINGERPRINT"
 
       - name: Publish ostree repo to bubble-flatpak-repo
@@ -385,7 +385,7 @@ jobs:
             exit 1
           fi
 
-          git clone git@github.com:TattvaOrg/bubble-flatpak-repo.git pages
+          git clone git@github.com:soyeb-jim285/bubble-flatpak-repo.git pages
           cd pages
           git config user.name "bubble release bot"
           git config user.email "release-bot@bubble.local"
@@ -397,7 +397,7 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to publish"
           else
-            git commit -m "Publish io.github.tattvaorg.Bubble ${TAG_NAME}"
+            git commit -m "Publish io.github.soyeb_jim285.Bubble ${TAG_NAME}"
             git push origin main
           fi
 
@@ -446,5 +446,5 @@ jobs:
           GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
           SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
         run: |
-          gh api repos/TattvaOrg/bubble-site/dispatches \
+          gh api repos/soyeb-jim285/bubble-site/dispatches \
             -f event_type=new-release || true
