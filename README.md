@@ -20,6 +20,8 @@
 [Compositor & Glass](#-compositor-integration-hyprland-niri--lniri)
 
 <img src="docs/screenshots/bubble.png">
+<img width="983" height="599" alt="bubble-str" src="https://github.com/user-attachments/assets/245c44e5-5e83-47dd-a0a6-1e3366ed68a0" />
+
 
 ---
 
@@ -28,7 +30,6 @@
 Bubble is a lightweight, responsive Qt6/QML desktop file manager engineered natively for Wayland and Hyprland. Combining **macOS Finder-style Miller columns**, buttery-smooth kinetic scrolling, and **AES-256 encrypted file vaults**, Bubble offers the speed of a keyboard-driven workflow with the polish of a modern desktop utility.
 
 ---
-
 
 
 ## Installation
