@@ -204,7 +204,6 @@ To enable liquid glass in Lniri, add this window rule to `~/.config/niri/config.
 ```kdl
 window-rule {
     match app-id="io.github.tattvaorg.Bubble"
-    match app-id="io.github.soyeb_jim285.Bubble"
     match app-id="bubble"
     match app-id="Bubble"
 
@@ -243,7 +242,7 @@ window-rule {
 ```
 
 > [!TIP]
-> - Both `match app-id="Bubble"` and `match app-id="io.github.tattvaorg.Bubble"` (as well as legacy `io.github.soyeb_jim285.Bubble`) match automatically. If your environment requires a specific custom Wayland `app-id`, specify `BUBBLE_APP_ID=<your-id> bubble`.
+> - Both `match app-id="Bubble"` and `match app-id="io.github.tattvaorg.Bubble"` match automatically. If your environment requires a specific custom Wayland `app-id`, specify `BUBBLE_APP_ID=<your-id> bubble`.
 > - Transparency level and container transparency can be toggled and finely adjusted inside Bubble in **Settings (`Ctrl+,`)** under **Appearance**.
 
 ---

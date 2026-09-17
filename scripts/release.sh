@@ -89,7 +89,7 @@ import re, sys, pathlib
 path, tag = pathlib.Path(sys.argv[1]), sys.argv[2]
 text = path.read_text()
 new, n = re.subn(
-    r'(url:\s*https://github\.com/soyeb-jim285/bubble\.git\s*\n(?:[^\n]*\n)*?\s*tag:\s*)v\d+\.\d+\.\d+',
+    r'(url:\s*https://github\.com/TattvaOrg/Bubble\.git\s*\n(?:[^\n]*\n)*?\s*tag:\s*)v\d+\.\d+\.\d+',
     rf'\g<1>{tag}',
     text,
 )
@@ -109,7 +109,7 @@ text = path.read_text()
 
 # Screenshot URLs
 text = re.sub(
-    r'(raw\.githubusercontent\.com/soyeb-jim285/bubble/)v\d+\.\d+\.\d+',
+    r'(raw\.githubusercontent\.com/TattvaOrg/Bubble/)v\d+\.\d+\.\d+',
     rf'\g<1>{tag}',
     text,
 )

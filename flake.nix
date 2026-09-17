@@ -177,7 +177,7 @@
 
           meta = with pkgs.lib; {
             description = "A lightweight Qt6/QML file manager for Hyprland";
-            homepage = "https://github.com/soyeb-jim285/bubble";
+            homepage = "https://github.com/TattvaOrg/Bubble";
             license = licenses.mit;
             mainProgram = "bubble";
             platforms = systems;

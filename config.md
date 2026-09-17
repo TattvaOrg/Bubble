@@ -278,7 +278,6 @@ In `~/.config/niri/config.kdl`, add window rules for Bubble to activate hardware
 ```kdl
 window-rule {
     match app-id="io.github.tattvaorg.Bubble"
-    match app-id="io.github.soyeb_jim285.Bubble"
     match app-id="bubble"
     match app-id="Bubble"
     match title="Bubble"
